@@ -1,0 +1,149 @@
+# =========================
+# Build systems
+# =========================
+build/
+_build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+compile_commands.json
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+
+# =========================
+# C / C++ tooling
+# =========================
+.clangd/
+.cache/clangd/
+.clang-format.cache
+
+# Conan
+.conan/
+conan.lock
+
+# vcpkg
+vcpkg_installed/
+
+# Meson
+.meson/
+meson-private/
+meson-logs/
+
+# =========================
+# Logs / temporary files
+# =========================
+*.log
+*.tmp
+*.bak
+*.orig
+
+tmp/
+temp/
+
+# =========================
+# Editors / IDEs
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.#*
+Session.vim
+
+# Vim / Neovim generated state
+.netrwhist
+.view/
+*.vim
+
+# =========================
+# Secrets and credentials
+# =========================
+
+# SSH
+.ssh/
+*.pem
+*.key
+*.pub
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# GPG
+.gnupg/
+*.asc
+
+# Cloud credentials
+.aws/
+.azure/
+.gcloud/
+.kube/
+
+# Environment files
+.env
+.env.*
+*.secret
+*.token
+*.credentials
+
+# Password managers
+.password-store/
+.keepassxc/
+*.kdbx
+
+# Netrc - plaintext creds used by curl/ftp/git/many CLIs
+.netrc
+_netrc
+
+# Git's own stored credentials (plaintext by default)
+.git-credentials
+
+# direnv - commonly used to export secrets as env vars
+.envrc
+.direnv/
+
+# Package manager auth tokens
+.npmrc
+.pypirc
+.cargo/credentials
+.cargo/credentials.toml
+.gem/credentials
+
+# Container / registry auth
+.docker/config.json
+
+# Infrastructure as code - state files and vars often contain secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.vault-token
+
+# Certs / keystores that bundle private keys
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# VPN configs (often embed auth)
+*.ovpn
+
+# =========================
+# User application state
+# =========================
+.cache/
+.local/share/
+.local/state/
+.local/tmp/
+
+# Runtime files
+/run/
+*.pid
+*.lock
