@@ -74,7 +74,11 @@ The author is affiliated with the physics department
 
 ## Expected sources to be used
 [0] [Y. LeCun, C. Cortes, C. Burges. The MNIST Database of Handwritten Digits.](http://yann.lecun.com/exdb/mnist/)
+
 [1] [M. Nielsen. Neural Networks and Deep Learning.](http://neuralnetworksanddeeplearning.com/)
+
 [2] [Wikipedia: Backpropagation.](https://en.wikipedia.org/wiki/Backpropagation)
+
 [3] [Intel. Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/)
+
 [4] [S. Bjorkqvist. Wiriting automates tests for neural networks.](https://www.sebastianbjorkqvist.com/blog/writing-automated-tests-for-neural-networks/)
