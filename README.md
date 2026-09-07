@@ -31,3 +31,4 @@ Or with script `./build.sh`
 ### Weekly reports
 
 [Week 1](/docs/reports/week1.md)
+[Week 2](/docs/reports/week2.md)
