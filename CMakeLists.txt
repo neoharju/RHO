@@ -37,7 +37,8 @@ target_sources(RHO
     FILE_SET CXX_MODULES
     BASE_DIRS ${PROJECT_SOURCE_DIR}/modules
     FILES
-      modules/foo.cppm
+      modules/linalg/gemm.cppm
+	  modules/core/matrix.cppm
 )
 target_sources(RHO
   PRIVATE
