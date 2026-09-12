@@ -5,7 +5,7 @@ RHO (rhodopsin) is a basic neural network to classify black and white images mad
 ## Prerequisites
 
 ```sh
-sudo apt install build-essential cmake ninja-build
+sudo apt install build-essential cmake ninja-build gzip
 ```
 
 > [!NOTE]
@@ -14,6 +14,10 @@ sudo apt install build-essential cmake ninja-build
 > - **GCC:** `15.2.0`, `16.1.1`
 > - **CMake:** `4.2.0`, `4.4.0`
 > - **Ninja:** `1.13.2-1`
+
+### MNIST dataset
+Download from pytorch mirror using 
+`./scripts/fetch_mnist.sh`
 
 ## Build and run
 
