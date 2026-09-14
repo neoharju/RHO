@@ -28,6 +28,10 @@ cmake --build build -j$(nproc) && ./build/RHO
 
 Or with script `./build.sh`
 
+## Build and test
+Run the following script to build and run tests in debug mode:
+`./tests.sh`
+
 ## Documentation
 
 [Specification Document](docs/specificationdocument.md)
@@ -35,4 +39,5 @@ Or with script `./build.sh`
 ### Weekly reports
 
 [Week 1](/docs/reports/week1.md)
+
 [Week 2](/docs/reports/week2.md)
