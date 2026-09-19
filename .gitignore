@@ -1,7 +1,7 @@
 # =========================
 # Build systems
 # =========================
-build/
+build*/
 _build/
 cmake-build-*/
 CMakeFiles/
