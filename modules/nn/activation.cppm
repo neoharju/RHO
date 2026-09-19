@@ -23,7 +23,8 @@ export namespace rho::nn {
 			}
 		}
 
-
+	// The subgradient at zero is any value in [0,1] but
+	// we define it as 0
 	template <class T>
 		inline void relu_backward(rho::core::matrix_view<const T> z, rho::core::matrix_view<const T> da, rho::core::matrix_view<T> dz) noexcept {
 			for (std::size_t i = 0; i < z.rows(); ++i) {
@@ -31,7 +32,7 @@ export namespace rho::nn {
 				const auto dai = da.row(i);
 				const auto dzi = dz.row(i);
 				for(std::size_t j = 0; j < z.cols(); ++j){
-					dzi[i] = zi[j] > T{0} ? dai[j] : T{0};
+					dzi[j] = zi[j] > T{0} ? dai[j] : T{0};
 				}
 			}
 		}
