@@ -24,6 +24,8 @@ TEST(ReLU, ForwardInt) {
 	EXPECT_EQ(A(0, 3), 3);
 
 	EXPECT_EQ(A(0, 4), 0);
+
+	EXPECT_FALSE(std::signbit(A(0,1)));
 }
 
 TEST(ReLU, ForwardFloat) {
@@ -41,6 +43,8 @@ TEST(ReLU, ForwardFloat) {
 	EXPECT_EQ(A(0, 3), 3.5f);
 
 	EXPECT_GT(A(0, 4), 0.0f);
+
+	EXPECT_FALSE(std::signbit(A(0,1)));
 }
 
 TEST(ReLU, ForwardDouble) {
@@ -58,6 +62,8 @@ TEST(ReLU, ForwardDouble) {
 	EXPECT_EQ(A(0, 3), 3.5);
 
 	EXPECT_GT(A(0, 4), 0.0);
+
+	EXPECT_FALSE(std::signbit(A(0,1)));
 }
 /*
  * The subgradient at zero is any value in [0,1] but we define it as 0
@@ -119,4 +125,26 @@ TEST(ReLU, BackwardDouble) {
 	EXPECT_EQ(dZ(0, 2), 0.0);
 	EXPECT_EQ(dZ(0, 3), 1.0);
 	EXPECT_EQ(dZ(0, 4), 1.0); 
+}
+
+// -----------------------------------------------------------------------------
+// --- softmax and cross-entropy
+// -----------------------------------------------------------------------------
+
+TEST(SoftmaxCrossEntropy, NumericalExtremes) {
+	using rho::core::matrix;
+	std::vector<double> z_values = {1000.0, 1000.0, 1000.0};
+	std::vector<double> dz_values(3, 0.0);
+	const std::vector<std::uint8_t> y{1U};
+
+	const matrix<double> Z{1, 3, std::move(z_values)};
+	matrix<double> dZ{1, 3, std::move(dz_values)};
+
+	const double loss = rho::nn::softmax_cross_entropy<double>(Z.view(), std::span{y}, dZ.view());
+
+	ASSERT_TRUE(std::isfinite(loss));
+	EXPECT_NEAR(loss, std::log(3.0), 1e-6);
+
+	EXPECT_NEAR(dZ(0, 0), 1.0 / 3.0, 1e-6);
+	EXPECT_NEAR(dZ(0, 1), 1.0 / 3.0 - 1.0, 1e-6);
 }
