@@ -123,6 +123,8 @@ class matrix {
         return {data_.data(), rows_, cols_, stride_};
     }
 
+	void fill(const T& v) noexcept { data_.fill(v); }
+
   private:
     std::vector<T> data_; // mm_alloc or aligned buffer later?
     std::size_t rows_{};
