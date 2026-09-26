@@ -41,6 +41,10 @@ class dense {
     void forward(){}
     void backward(){}
 
+	void refresh_transpose() noexcept {
+		rho::linalg::transpose<T>(w_.view(), wt_.view());
+	}
+
     [[nodiscard]] rho::core::matrix_view<T> weights() noexcept {
         return w_.view();
     }
@@ -50,7 +54,7 @@ class dense {
     [[nodiscard]] rho::core::matrix_view<T> bias_matrix() noexcept {
         return b_.view();
     }
-    [[nodiscard]] rho::core::marixt_view<T> grad_bias_matrix() noexcept {
+    [[nodiscard]] rho::core::matrix_view<T> grad_bias_matrix() noexcept {
         return db_.view();
     }
 

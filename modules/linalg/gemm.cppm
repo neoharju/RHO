@@ -31,4 +31,15 @@ void gemm(rho::core::matrix_view<const T> A,
     }
 }
 
+// simple transpose for small matrices
+// NB: note cache efficient for larger onces, just like GEMM above
+template <class T>
+void transpose(rho::core::matrix_view<const T> src, rho::core::matrix_view<T> dst) noexcept{
+	for (std::size_t i = 0; i < src.rows(); ++i) {
+		for (std::size_t j = 0; j < src.cols(); ++j) {
+			dst(j, i) = src(i, j);
+		}
+	}
+}
+
 } // namespace rho::linalg
