@@ -71,17 +71,59 @@ class xoshiro256pp {
 
 		std::uint64_t operator()() noexcept { return next(); }
 
+		void jump() noexcept { apply_jump(jump_poly); }
+		void long_jump() noexcept { apply_jump(long_jump_poly); }
+
+		[[nodiscard]] xoshiro256pp jumped() const noexcept {
+			xoshiro256pp copy{*this};
+			copy.jump();
+			return copy;
+		}
+
+		// get state
+		[[nodiscard]] std::array<std::uint64_t, 4> state() const noexcept { 
+			return s_; 
+		}
+
+
+
 	private:
 		static constexpr std::uint64_t rotl(std::uint64_t x, int k) noexcept {
 			return (x << static_cast<unsigned>(k) | (x >> static_cast<unsigned>(64-k));
 		}
 
+		// https://prng.di.unimi.it/splitmix64.c
 		static constexpr std::uint64_t splitmix64(std::uint64_t& x) noexcept {
 			std::uint64_t z = (x += 0x9E3779B97F4A7C15ULL);
 			z = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
 			z = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
 			return z ^ (z >> 31U);
 		}
+
+		// https://prng.di.unimi.it/xoshiro256plusplus.c
+		void apply_jump(const std::array<std::uint64_t, 4>& poly) noexcept {
+			std::array<std::uint64_t, 4> acc{};
+			for (const std::uint64_t word : poly) {
+				for (unsigned b = 0; b < 64U; ++b) {
+					if ((word & (std::uint64_t{1} << b)) != 0U) {
+						for (std::size_t i = 0; i < 4U; ++i) {
+							acc[i] ^= s_[i];
+						}
+					}
+					static_cast<void>(next());
+				}
+			}
+			s_ = acc;
+		}
+
+		// magic jump constants for polynomial taken from here
+		// https://prng.di.unimi.it/xoshiro256plusplus.c
+		static constexpr std::array<std::uint64_t, 4> jump_poly{
+			0x180EC6D33CFD0ABAULL, 0xD5A61266F0C9392CULL, 0xA9582618E03FC9AAULL, 0x39ABDC4529B1661CULL};
+		
+		static constexpr std::array<std::uint64_t, 4> long_jump_poly{
+			0x76E15D3EFEFDCBBFULL, 0xC5004E441C522FB3ULL, 0x77710069854EE241ULL, 0x39109BB02ACBE635ULL};
+
 
 		std::array<std::uint64_t, 4> s_{};
 };
