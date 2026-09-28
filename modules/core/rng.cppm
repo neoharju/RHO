@@ -6,6 +6,7 @@ export namespace rho::core {
 
 // xoshiro256++ (blackman & vigna)
 // http://arxiv.org/pdf/1805.01407
+// https://prng.di.unimi.it/xoshiro256plusplus.c
 /*
  *  NB: Addition wraps modulo 2^64 due to uint
  *  result = Add two state words, rotate the result left (bits that fall from
@@ -34,11 +35,25 @@ export namespace rho::core {
  *           shorter periods, worse statistical properties etc:
  *           they are algorithm parameter.
  *   - R: rotate sum(s[0], s[3]) by R, i.e. rotl(s[0] + s[3], R)
+ *  
+ *  ---------------------------------------------------------------
+ *  splitmix64 for initial state of generators, as recommended in
+ *  https://prng.di.unimi.it/
+ *  https://prng.di.unimi.it/splitmix64.c
  */
 
 class xoshiro256pp {
 	public:
 		explicit xoshiro256pp(std::uint64_t seed) noexcept {
+			std::uint64_t x = seed;
+			for (auto& w : s_) {
+				w = splitmix64(x);
+			}
+			// Cant state transition from all zero state, as said in
+			// 1805.01407 paper, so exclute it
+			if (std::ranges::all_of(s_, [](std::uint64_t w) { return w == 0U; })) {
+				s_[0] = 0x9E3779B97F4A7C15ULL;
+			}
 		}
 		
 		std::uint64_t next() noexcept {
@@ -60,6 +75,14 @@ class xoshiro256pp {
 		static constexpr std::uint64_t rotl(std::uint64_t x, int k) noexcept {
 			return (x << static_cast<unsigned>(k) | (x >> static_cast<unsigned>(64-k));
 		}
+
+		static constexpr std::uint64_t splitmix64(std::uint64_t& x) noexcept {
+			std::uint64_t z = (x += 0x9E3779B97F4A7C15ULL);
+			z = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
+			z = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
+			return z ^ (z >> 31U);
+		}
+
 		std::array<std::uint64_t, 4> s_{};
 };
 
