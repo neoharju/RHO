@@ -8,11 +8,11 @@ export namespace rho::optim {
 
 template <class T>
 class sgd {
-	public:
-		sgd() = default;
-	
-	private:
-		T lr_{};
+  public:
+    sgd() = default;
+
+  private:
+    T lr_{};
 }
 
 } // namespace rho::optim

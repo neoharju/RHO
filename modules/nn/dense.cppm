@@ -37,13 +37,13 @@ class dense {
         return n_out_;
     }
 
-    // z = x * W + b. 
-    void forward(){}
-    void backward(){}
+    // z = x * W + b.
+    void forward() {}
+    void backward() {}
 
-	void refresh_transpose() noexcept {
-		rho::linalg::transpose<T>(w_.view(), wt_.view());
-	}
+    void refresh_transpose() noexcept {
+        rho::linalg::transpose<T>(w_.view(), wt_.view());
+    }
 
     [[nodiscard]] rho::core::matrix_view<T> weights() noexcept {
         return w_.view();
@@ -59,7 +59,6 @@ class dense {
     }
 
   private:
-
     rho::core::matrix<T> w_;  // weights, n_in x n_out
     rho::core::matrix<T> wt_; // W^T, n_out x n_in; empty if this layer has no dX
     rho::core::matrix<T> dw_; // weight gradients
@@ -70,4 +69,3 @@ class dense {
 };
 
 } // namespace rho::nn
-
