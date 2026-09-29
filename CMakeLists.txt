@@ -42,6 +42,7 @@ target_sources(rho_lib
 		${PROJECT_SOURCE_DIR}/modules
 	FILES
 		modules/core/matrix.cppm
+		modules/core/rng.cppm
 		modules/linalg/gemm.cppm
 		modules/nn/activation.cppm
 		modules/nn/loss.cppm
@@ -107,6 +108,7 @@ if(RHO_BUILD_TESTS)
 	add_executable(RHO_tests
 		tests/test_gemm.cpp
 		tests/test_nn.cpp
+		tests/test_rng.cpp
 	)
 
 	target_link_libraries(RHO_tests
