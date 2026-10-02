@@ -3,11 +3,12 @@ export module rho.core.rng;
 import std;
 
 export namespace rho::core {
-
-// xoshiro256++ (blackman & vigna)
-// http://arxiv.org/pdf/1805.01407
-// https://prng.di.unimi.it/xoshiro256plusplus.c
-/*
+// Implementations
+// ---------------------------------------------------------------
+/* xoshiro256++ (blackman & vigna)
+ * http://arxiv.org/pdf/1805.01407
+ * https://prng.di.unimi.it/xoshiro256plusplus.c
+ *
  *  NB: Addition wraps modulo 2^64 due to uint
  *  result = Add two state words, rotate the result left (bits that fall from
  *   left side come back to right), add the first selected state word again
@@ -40,6 +41,16 @@ export namespace rho::core {
  *  splitmix64 for initial state of generators, as recommended in
  *  https://prng.di.unimi.it/
  *  https://prng.di.unimi.it/splitmix64.c
+ *
+ *  ---------------------------------------------------------------
+ *  Lemire's fast random shuffle derived from the Fisher-Yates shuffle, with
+ *  rejection sampling to reduce bias.
+ *  https://lemire.me/blog/2016/06/30/fast-random-shuffling
+ *  https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+ *
+ *  ---------------------------------------------------------------
+ *  Box-Muller transform for generating normally distributed random numbers
+ *  https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
  */
 
 class xoshiro256pp {
@@ -54,7 +65,7 @@ class xoshiro256pp {
             w = splitmix64(x);
         }
         // Cant state transition from all zero state, as said in
-        // 1805.01407 paper, so exclute it
+        // 1805.01407 paper, so exclude it
         if (std::ranges::all_of(s_, [](std::uint64_t w) { return w == 0U; })) {
             s_[0] = 0x9E3779B97F4A7C15ULL;
         }
@@ -120,6 +131,38 @@ class xoshiro256pp {
         // The upper 64 bits of random_number * range
         // gives the unbiased random number in [0, range)
         return static_cast<std::uint64_t>(m >> 64U);
+    }
+
+    // A double has 1 sign bit, 11 exponent bits, 52 fraction bits
+    // We want the 1. + fraction bits = 1bit + 52 fraction bits = 53 bits
+    // - Every integer from 0 to 2^53 is representable with this
+    // 1. Shift 64 random bits from next() by >>11 to get 53 bits
+    //   1.1 The result is an integer in [0, 2^53-1)
+    // 2. multiply by (1/2^53) which is 0x1.0p-e53 in hexadecimal
+    //
+    // Therefore, we get a number in the range {0, 1/2^53, ..., ((2^53)-1)/(2^53)}
+    // which is thus in the range [0, 1) but it is not uniformly distributed
+    // over all real numbers in [0,1), but over a grid of aforementioned values.
+    [[nodiscard]] inline double uniform01() noexcept {
+        return static_cast<double>(next() >> 11U) * 0x1.0p-53;
+    }
+
+    // this is to scale uniform01 values
+    [[nodiscard]] double uniform(double lo, double hi) noexcept {
+        return lo + (hi - lo) * uniform01();
+    }
+
+    // Box-Muller stateless (discard the other z value; more deterministic sims)
+    [[nodiscard]] double normal() noexcept {
+        constexpr double two_pi{2.0 * std::numbers::pi};
+        double u1 = uniform01();
+        // Chance of getting a 0 from uniform is 1/2^53 but still possible, so
+        // we need a redraw if it happens, since log(0) would be -inf
+        while (u1 <= 0.0) [[unlikely]] {
+            u1 = uniform01();
+        }
+        const double u2 = uniform01();
+        return std::sqrt(-2.0 * std::log(u1)) * std::cos(two_pi * u2);
     }
 
   private:
