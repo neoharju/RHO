@@ -16,7 +16,6 @@ Initalize dataset creation and standardization (z-score)
 | 28.9. | 5h | Implement xoshiro256++, splitmix64 |
 | 29.9. | 5h | Finish shuffle+testing, lemired bias reduction |
 | 1.10. | 7h | Implement idx file loading with error checking and conversion |
-| 2.10  | 8h | Add dockerfile for convenience, and Box-Muller transform,
-dataset, z-score |
+| 2.10  | 8h | Add dockerfile for convenience, and Box-Muller transform, dataset, z-score |
 | total | 23h | |
 
