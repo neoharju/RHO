@@ -43,3 +43,7 @@ Run the following script to build and run tests in debug mode:
 [Week 2](/docs/reports/week2.md)
 
 [Week 3](/docs/reports/week3.md)
+
+[Week 4](/docs/reports/week4.md)
+
+[Week 5](/docs/reports/week5.md)

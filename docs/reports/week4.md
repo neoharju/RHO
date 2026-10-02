@@ -1,4 +1,4 @@
-# Weekly report: week 3
+# Weekly report: week 4
 
 Research dense layer, mlp, SGD with momentum implementation
 Implement mlp, init dense, xoshiro for random
