@@ -2,11 +2,16 @@
 
 Add xoshiro256pp shuffle with lemires bias reduction techniques,
 and splitmix64 to initialize state generators.
+
 Implement idx file loading and conversion from big-endian to little-endian.
+
 Add aligned allocators for vectors to optimize cache loading.
+
 Add dockerfile for convenience, so the project can be tested on older systems
 with less-modern build dependencies.
+
 Add Box-Muller transform
+
 Initalize dataset creation and standardization (z-score)
 
 ## Time log
