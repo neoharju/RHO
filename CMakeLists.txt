@@ -42,7 +42,9 @@ target_sources(rho_lib
 		${PROJECT_SOURCE_DIR}/modules
 	FILES
 		modules/core/matrix.cppm
+		modules/core/memory.cppm
 		modules/core/rng.cppm
+		modules/io/idx.cppm
 		modules/linalg/gemm.cppm
 		modules/nn/activation.cppm
 		modules/nn/loss.cppm
