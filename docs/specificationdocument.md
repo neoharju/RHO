@@ -44,7 +44,7 @@ The grayscale images are preprocessed, normalized and converted into a (N, 28x28
 | Operation | Complexity | Note |
 |---|---|---|
 | Loading the data | O(N·d) | d pixels per image |
-| Forward pass, one sample | O(W) | one GEMM with vector addition: Z = XW + b, which is O(P^3) for pixels |
+| Forward pass, one sample | O(W) | one GEMM with vector addition: Z = XW + b, which is $$O(B·n_in·n_out)$$ where B is batch size |
 | Backward pass, one sample | O(2·W) | two GEMMs |
 | Parameter update | O(W) | 
 | One mini-batch step | O(B·W) | where B is the size of the mini-batch |
@@ -52,7 +52,7 @@ The grayscale images are preprocessed, normalized and converted into a (N, 28x28
 | Full training | O(E·N·W) | where E is the number of Epochs |
 | Evaluation on the test set | O(N_test·W) | |
 
-Per-training step we can assume the backward pass is the slowest part due to two GEMMS. Also, if layer input `n_in` and `n_out` are doubled the weight matrix `W = n_in · n_out` grows quadratically, increasing the GEMM time.
+Per-training step we can assume the backward pass is the slowest part due to two GEMMS. Also, if layer input `n_in` and output `n_out` are doubled the weight matrix `W = n_in · n_out` grows quadratically, increasing the GEMM time.
 
 ### Space
 | Item | Complexity | Notes |
