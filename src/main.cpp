@@ -25,9 +25,10 @@ int main() { // int argc, char *argv[]) {
 		std::println();
 	}
 
-	std::println("Importing dataset test");
+	std::println("test: Importing MNIST dataset");
 
-	const auto train = rho::io::dataset::load("data/train-images-idx3-ubyte",
+	const auto train = rho::io::dataset::load(
+			"data/train-images-idx3-ubyte",
 			"data/train-labels-idx1-ubyte");
 
 	if (!train) {
@@ -35,6 +36,15 @@ int main() { // int argc, char *argv[]) {
 		return 1;
 	}
 
-	std::println("Loaded {} training images", train->size());
+	std::println("Loaded {} train images", train->size());
+	const auto test = rho::io::dataset::load(
+			"data/t10k-images-idx3-ubyte",
+			"data/t10k-labels-idx1-ubyte");
+
+	if (!test) {
+		rho::io::display_error(test.error());
+		return 1;
+	}
+	std::println("Loaded {} test images", test->size());
 
 }
