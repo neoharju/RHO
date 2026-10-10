@@ -1,12 +1,19 @@
 export module rho.io.dataset;
 
 import std;
+import rho.core.memory;
 
+export import rho.core.rng;
 export import rho.io.idx;
 export import rho.io.normalization;
-export import rho.core.rng;
 
 namespace fs = std::filesystem;
+
+[[noreturn]]
+void bug_found(std::string_view what) noexcept {
+	std::println(std::cerr, "rho::io precondition failed: {}", what);
+	std::abort();
+}
 
 export namespace rho::io {
 // MNIST specific
@@ -14,6 +21,7 @@ inline constexpr std::size_t image_rows{28};
 inline constexpr std::size_t image_cols{28};
 inline constexpr std::size_t pixels_per_image{image_rows * image_cols}; // 784
 inline constexpr std::uint8_t num_classes{10};
+
 
 class dataset {
   public:
@@ -32,7 +40,7 @@ class dataset {
 
     [[nodiscard]]
     inline std::uint8_t label(std::uint32_t i) const noexcept {
-        return labels_span()[i];
+        return labels_.span()[i];
     }
 
   private:
@@ -83,6 +91,19 @@ std::expected<dataset, Error> dataset::load(const fs::path &images_file,
     return dataset{std::move(images->data), std::move(labels->data)};
 }
 
+[[nodiscard]]
+normalization compute_normalization(const dataset& ds, std::span<const std::uint32_t> ids)
+{
+	if (ids.empty()) {
+		return {};
+	}
+
+	if (std::ranges::max(ids) >= ds.size()) [[unlikely]]
+	{
+		bug_found("compute_normalization: id out of range for this dataset");
+	}
+
+}
 // TODO:
 // normalize
 // shuffle data

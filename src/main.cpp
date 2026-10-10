@@ -1,6 +1,7 @@
 import std;
 
 import rho.core.matrix;
+import rho.io.dataset;
 import rho.linalg.gemm;
 
 int main() { // int argc, char *argv[]) {
@@ -24,5 +25,16 @@ int main() { // int argc, char *argv[]) {
 		std::println();
 	}
 
-	std::println("Hello World from main!");
+	std::println("Importing dataset test");
+
+	const auto train = rho::io::dataset::load("data/train-images-idx3-ubyte",
+			"data/train-labels-idx1-ubyte");
+
+	if (!train) {
+		rho::io::display_error(train.error());
+		return 1;
+	}
+
+	std::println("Loaded {} training images", train->size());
+
 }

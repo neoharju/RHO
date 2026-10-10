@@ -209,7 +209,7 @@ void display_error(const Error &error) {
 
     // The size of each dimension, 4 bytes each.
     std::array<std::byte, 4 * max_rank> raw{};
-    if (!read_exact(in, {raw.data(), 4U * max_rank})) {
+    if (!read_exact(in, std::span{raw}.first(4U * max_rank))) {
         return std::unexpected(ReadError{path, "does not match an IDX header"});
     }
 

@@ -45,6 +45,8 @@ target_sources(rho_lib
 		modules/core/memory.cppm
 		modules/core/rng.cppm
 		modules/io/idx.cppm
+		modules/io/normalization.cppm
+		modules/io/dataset.cppm
 		modules/linalg/gemm.cppm
 		modules/nn/activation.cppm
 		modules/nn/loss.cppm
