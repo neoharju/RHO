@@ -114,6 +114,7 @@ if(RHO_BUILD_TESTS)
 
   add_executable(RHO_tests
   tests/test_gemm.cpp
+  tests/test_matrix.cpp
     tests/test_normalization.cpp
   tests/test_nn.cpp
   tests/test_rng.cpp	)
