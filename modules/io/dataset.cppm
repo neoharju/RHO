@@ -103,9 +103,33 @@ normalization compute_normalization(const dataset& ds, std::span<const std::uint
 		bug_found("compute_normalization: id out of range for this dataset");
 	}
 
+	std::uint64_t sum{};
+	std::uint64_t sum_sq{};
+
+	for(const auto id : ids) {
+		std::uint32_t s{};
+		std::uint32_t sq{};
+
+		for (const auto v : ds.image(id)) {
+			s += v;
+			sq += v * v;
+		}
+
+		sum += s;
+		sum_sq += sq;
+	}
+
+	const double n = static_cast<double>(ids.size()) * static_cast<double>(pixels_per_image);
+	const double mean = static_cast<double>(sum) / n;
+
+	double var = static_cast<double>(sum_sq) / n - mean * mean;
+	// make sure rounding does not make var go below zero
+	var = var > 0.0 ? var : 0.0;
+
+	return normalization::from_mean_stddev(mean, std::sqrt(var));
 }
+
 // TODO:
-// normalize
 // shuffle data
 // split to training/test/validation
 // batch data for efficiency
