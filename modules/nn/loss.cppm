@@ -104,7 +104,8 @@ void softmax(rho::core::matrix_view<const T> logits, rho::core::matrix_view<T> p
 }
 
 template <class T, class U>
-[[nodiscard]] T cross_entropy(rho::core::matrix_view<const T> probabilities, std::span<const U> labels) {
+[[nodiscard]] T cross_entropy(rho::core::matrix_view<const T> probabilities,
+                              std::span<const U> labels) {
 
     T loss{0};
     // assume the probabilities are normalized

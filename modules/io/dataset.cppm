@@ -11,8 +11,8 @@ namespace fs = std::filesystem;
 
 [[noreturn]]
 void bug_found(std::string_view what) noexcept {
-	std::println(std::cerr, "rho::io precondition failed: {}", what);
-	std::abort();
+    std::println(std::cerr, "rho::io precondition failed: {}", what);
+    std::abort();
 }
 
 export namespace rho::io {
@@ -21,7 +21,6 @@ inline constexpr std::size_t image_rows{28};
 inline constexpr std::size_t image_cols{28};
 inline constexpr std::size_t pixels_per_image{image_rows * image_cols}; // 784
 inline constexpr std::uint8_t num_classes{10};
-
 
 class dataset {
   public:
@@ -92,41 +91,39 @@ std::expected<dataset, Error> dataset::load(const fs::path &images_file,
 }
 
 [[nodiscard]]
-normalization compute_normalization(const dataset& ds, std::span<const std::uint32_t> ids)
-{
-	if (ids.empty()) {
-		return {};
-	}
+normalization compute_normalization(const dataset &ds, std::span<const std::uint32_t> ids) {
+    if (ids.empty()) {
+        return {};
+    }
 
-	if (std::ranges::max(ids) >= ds.size()) [[unlikely]]
-	{
-		bug_found("compute_normalization: id out of range for this dataset");
-	}
+    if (std::ranges::max(ids) >= ds.size()) [[unlikely]] {
+        bug_found("compute_normalization: id out of range for this dataset");
+    }
 
-	std::uint64_t sum{};
-	std::uint64_t sum_sq{};
+    std::uint64_t sum{};
+    std::uint64_t sum_sq{};
 
-	for(const auto id : ids) {
-		std::uint32_t s{};
-		std::uint32_t sq{};
+    for (const auto id : ids) {
+        std::uint32_t s{};
+        std::uint32_t sq{};
 
-		for (const auto v : ds.image(id)) {
-			s += v;
-			sq += v * v;
-		}
+        for (const auto v : ds.image(id)) {
+            s += v;
+            sq += v * v;
+        }
 
-		sum += s;
-		sum_sq += sq;
-	}
+        sum += s;
+        sum_sq += sq;
+    }
 
-	const double n = static_cast<double>(ids.size()) * static_cast<double>(pixels_per_image);
-	const double mean = static_cast<double>(sum) / n;
+    const double n = static_cast<double>(ids.size()) * static_cast<double>(pixels_per_image);
+    const double mean = static_cast<double>(sum) / n;
 
-	double var = static_cast<double>(sum_sq) / n - mean * mean;
-	// make sure rounding does not make var go below zero
-	var = var > 0.0 ? var : 0.0;
+    double var = static_cast<double>(sum_sq) / n - mean * mean;
+    // make sure rounding does not make var go below zero
+    var = var > 0.0 ? var : 0.0;
 
-	return normalization::from_mean_stddev(mean, std::sqrt(var));
+    return normalization::from_mean_stddev(mean, std::sqrt(var));
 }
 
 // TODO:

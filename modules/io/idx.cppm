@@ -33,12 +33,10 @@ namespace fs = std::filesystem;
            | (std::to_integer<std::uint32_t>(b[2]) << 8U) | std::to_integer<std::uint32_t>(b[3]);
 }
 // check that it works
-static_assert(load_bigendian32(std::array{
-                  std::byte{0x00}, 
-				  std::byte{0x00}, 
-				  std::byte{0xEA}, 
-				  std::byte{0x60}
-				  }.data()) == 60000U);
+static_assert(
+    load_bigendian32(
+        std::array{std::byte{0x00}, std::byte{0x00}, std::byte{0xEA}, std::byte{0x60}}.data())
+    == 60000U);
 
 // Reads bytes.size() bytes
 [[nodiscard]] bool read_exact(std::istream &in, std::span<std::byte> bytes) {
