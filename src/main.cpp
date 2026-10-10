@@ -46,5 +46,27 @@ int main() { // int argc, char *argv[]) {
 		return 1;
 	}
 	std::println("Loaded {} test images", test->size());
+	// check train norms
+	{
+		std::vector<std::uint32_t> train_ids(train->size());
+		std::iota(train_ids.begin(), train_ids.end(), 0U);
+		const auto norm = rho::io::compute_normalization(*train, train_ids);
+
+		const double mean = -norm.bias / norm.scale;
+		const double stddev = 1.0 / norm.scale;
+
+		std::println("Train pixels: mean {:.4f}, stddev {:.4f}, normalized range [{:.4f}, {:.4f}]", mean, stddev, norm.apply(0), norm.apply(255));
+	}
+	// check test norms
+	{	
+		std::vector<std::uint32_t> test_ids(test->size());
+		std::iota(test_ids.begin(), test_ids.end(), 0U);
+		const auto norm = rho::io::compute_normalization(*test, test_ids);
+
+		const double mean = -norm.bias / norm.scale;
+		const double stddev = 1.0 / norm.scale;
+
+		std::println("Test pixels: mean {:.4f}, stddev {:.4f}, normalized range [{:.4f}, {:.4f}]", mean, stddev, norm.apply(0), norm.apply(255));
+	}
 
 }
