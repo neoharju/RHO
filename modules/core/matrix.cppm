@@ -14,6 +14,12 @@ class matrix_view {
     constexpr matrix_view(T *p, std::size_t rows, std::size_t cols, std::size_t stride) noexcept
         : data_{p}, rows_{rows}, cols_{cols}, stride_{stride} {}
 
+    // matrix_view<float> -> matrix_view<const float> (not the other way)
+    template <class U>
+        requires std::same_as<T, const U>
+    constexpr matrix_view(matrix_view<U> other) noexcept
+        : matrix_view{other.data(), other.rows(), other.cols(), other.stride()} {}
+
     [[nodiscard]]
     constexpr std::size_t rows() const noexcept {
         return rows_;

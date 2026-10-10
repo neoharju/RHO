@@ -42,6 +42,9 @@ class dense {
     void backward() {}
 
     void refresh_transpose() noexcept {
+        if (wt_.rows() == 0U) { // no W^T (needs input grad == false, e.g. layer 0)
+            return;
+        }
         rho::linalg::transpose<T>(w_.view(), wt_.view());
     }
 

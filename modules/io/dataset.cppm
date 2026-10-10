@@ -72,7 +72,7 @@ std::expected<dataset, Error> dataset::load(const fs::path &images_file,
     }
 
     if (labels->rank != 1U) {
-        return std::unexpected(BadShapeError{labels_file, labels->dims, labels->rank, "[N"});
+        return std::unexpected(BadShapeError{labels_file, labels->dims, labels->rank, "[N]"});
     }
 
     if (labels->dims[0] != images->dims[0]) {

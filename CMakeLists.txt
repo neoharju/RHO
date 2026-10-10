@@ -50,6 +50,9 @@ target_sources(rho_lib
   modules/linalg/gemm.cppm
   modules/nn/activation.cppm
   modules/nn/loss.cppm
+  modules/nn/dense.cppm
+  modules/nn/mlp.cppm
+  modules/optim/optim.cppm
 )
 
 

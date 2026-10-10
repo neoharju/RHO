@@ -13,6 +13,6 @@ class sgd {
 
   private:
     T lr_{};
-}
+};
 
 } // namespace rho::optim

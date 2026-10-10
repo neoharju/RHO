@@ -97,7 +97,7 @@ class mlp {
     // Forward pass and loss
     [[nodiscard]] T loss(rho::core::matrix_view<const T> x,
                          std::span<const std::uint8_t> labels) noexcept {
-        return softmax_cross_entropy_loss<T>(forward(x), labels);
+        return softmax_cross_entropy<T>(forward(x), labels, rho::core::matrix_view<T>{});
     }
 
     // Forward pass, loss, and backpropagation
