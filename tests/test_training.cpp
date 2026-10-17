@@ -49,24 +49,13 @@ struct TestData {
     }
     [[nodiscard]] rho::core::matrix_view<const float> rows(std::size_t first,
                                                            std::size_t count) const {
-        return rho::core::matrix_view<const float>{
-            x.data() + first * x.stride(), count, x.cols(), x.stride()};
+        return x.view().row_range(first, count);
     }
 
     [[nodiscard]] std::span<const std::uint8_t> labels(std::size_t first, std::size_t count) const {
         return std::span<const std::uint8_t>{y}.subspan(first, count);
     }
 };
-
-double accuracy(rho::core::matrix_view<const float> logits, std::span<const std::uint8_t> labels) {
-    std::size_t correct = 0;
-    for (std::size_t r = 0; r < logits.rows(); ++r) {
-        const auto row = logits.row(r);
-        correct +=
-            static_cast<std::size_t>(std::ranges::max_element(row) - row.begin() == labels[r]);
-    }
-    return static_cast<double>(correct) / static_cast<double>(logits.rows());
-}
 
 } // namespace
 
@@ -102,5 +91,5 @@ TEST(Training, OverfitsTinyDataset) {
     loss = net.loss(data.rows(0, samples), data.labels(0, samples));
 
     EXPECT_LT(loss, 0.01f);
-    EXPECT_EQ(accuracy(net.logits(), data.labels(0, samples)), 1.0);
+    EXPECT_EQ(rho::nn::count_correct<float>(net.logits(), data.labels(0, samples)), samples);
 }

@@ -163,4 +163,22 @@ template <class T, class U>
 
     return loss_sum * inv_samples;
 }
+
+template <class T>
+[[nodiscard]] std::size_t argmax_row(rho::core::matrix_view<const T> scores,
+                                     std::size_t i) noexcept {
+    const auto row = scores.row(i);
+    return static_cast<std::size_t>(std::ranges::max_element(row) - row.begin());
+}
+
+template <class T>
+[[nodiscard]] std::size_t count_correct(rho::core::matrix_view<const T> scores,
+                                        std::span<const std::uint8_t> labels) noexcept {
+    std::size_t correct{};
+
+    for (std::size_t i = 0; i < scores.rows(); ++i) {
+        correct += static_cast<std::size_t>(argmax_row<T>(scores, i) == labels[i]);
+    }
+    return correct;
+}
 } // namespace rho::nn

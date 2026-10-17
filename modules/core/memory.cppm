@@ -50,6 +50,17 @@ struct aligned_allocator {
 
 export namespace rho::core {
 
+// helper for preconditions
+constexpr void require(bool ok,
+                       std::string_view what,
+                       std::source_location where = std::source_location::current()) noexcept {
+    if (!ok) [[unlikely]] {
+        std::println(
+            std::cerr, "{}:{}: precondition failed: {}", where.file_name(), where.line(), what);
+        std::abort();
+    }
+}
+
 template <class T>
 using aligned_vector = std::vector<T, aligned_allocator<T>>;
 

@@ -9,12 +9,6 @@ export import rho.io.normalization;
 
 namespace fs = std::filesystem;
 
-[[noreturn]]
-void bug_found(std::string_view what) noexcept {
-    std::println(std::cerr, "rho::io precondition failed: {}", what);
-    std::abort();
-}
-
 export namespace rho::io {
 // MNIST specific
 inline constexpr std::size_t image_rows{28};
@@ -96,9 +90,8 @@ normalization compute_normalization(const dataset &ds, std::span<const std::uint
         return {};
     }
 
-    if (std::ranges::max(ids) >= ds.size()) [[unlikely]] {
-        bug_found("compute_normalization: id out of range for this dataset");
-    }
+    rho::core::require(std::ranges::max(ids) < ds.size(),
+                       "compute_normalization: id out of range for this dataset");
 
     std::uint64_t sum{};
     std::uint64_t sum_sq{};

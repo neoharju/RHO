@@ -121,7 +121,7 @@ class mlp {
   private:
     [[nodiscard]] static rho::core::matrix_view<T> first_rows(rho::core::matrix<T> &m,
                                                               std::size_t n) noexcept {
-        return rho::core::matrix_view<T>{m.data(), n, m.cols(), m.stride()};
+        return m.view().row_range(0, n);
     }
 
     std::vector<dense<T>> layers_;
