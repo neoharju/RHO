@@ -12,19 +12,19 @@ installed. The dockerfile will build a statically linked binary.
 > - **rho-tests:latest**   `682MB` due to test framework
 > - **rho:latest**         `3.96MB`
 
-MNIST dataset (`not used yet`) needs to be mounted. It is not included in the image,
+MNIST dataset needs to be mounted. It is not included in the image,
 so use the fetch script first to download it.
 
 ```sh
 sudo docker build -t rho .
 sudo docker run --rm rho
-# sudo docker run --rm -v "$PWD/data:/app/data:ro" rho
+sudo docker run --rm -v "$PWD/data:/app/data:ro" rho
 ```
 ### Build and run the tests
 ```sh
 sudo docker build --target tests -t rho-tests .
 sudo docker run --rm -t rho-tests
-# sudo docker run --rm -t -v "$PWD/data:/src/data:ro" rho-tests
+sudo docker run --rm -t -v "$PWD/data:/src/data:ro" rho-tests
 ```
 
 ## Prerequisites
@@ -74,3 +74,5 @@ Run the following script to build and run tests in debug mode:
 [Week 5](/docs/reports/week5.md)
 
 [Week 6](/docs/reports/week6.md)
+
+[Week 7](/docs/reports/week7.md)
