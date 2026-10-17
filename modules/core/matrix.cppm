@@ -14,6 +14,14 @@ class matrix_view {
     constexpr matrix_view(T *p, std::size_t rows, std::size_t cols, std::size_t stride) noexcept
         : data_{p}, rows_{rows}, cols_{cols}, stride_{stride} {}
 
+    // Rows [first, first + count) as a view of the memory
+	[[nodiscard]]
+    constexpr matrix_view row_range(std::size_t first, std::size_t count) const noexcept {
+        rho::core::require(first <= rows_ && count <= rows_ - first,
+                           "matrix_view::row_range: rows out of range");
+        return matrix_view{data_ + first * stride_, count, cols_, stride_};
+    }
+
     // matrix_view<float> -> matrix_view<const float> (not the other way)
     template <class U>
         requires std::same_as<T, const U>
