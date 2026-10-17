@@ -118,6 +118,7 @@ if(RHO_BUILD_TESTS)
     tests/test_normalization.cpp
     tests/test_nn.cpp
     tests/test_rng.cpp
+	tests/test_training.cpp
   )
 
   target_link_libraries(RHO_tests
