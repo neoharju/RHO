@@ -8,6 +8,8 @@ import rho.optim;
 
 // 1. the network overfits a tiny dataset
 // 2. gradients are non-zero and the loss decreases
+// 3. all layers change after each optimizer step
+// 4. the order of samples in a batch does not affect the output
 
 using rho::core::matrix;
 
@@ -131,3 +133,76 @@ TEST(Training, GradientsNonZero_LossDecreases) {
 
 	EXPECT_LT(loss_after, before_loss);
 }
+
+// test3:
+// - after a training step, the weights and biases of every layer have changed.
+TEST(Training, AllLayersChange) {
+	constexpr std::size_t samples{64};
+	const TestData data{samples, 8, 4, 3.0, 3};
+
+	// two hidden layers, so one in the middle
+	const std::array<std::size_t, 4> sizes{8, 16, 16, 4};
+
+	rho::nn::mlp<float> net{sizes, samples, 3};
+	rho::optim::sgd<float> opt{0.1f};
+
+	const auto x = data.rows(0, samples);
+	const auto y = data.labels(0, samples);
+
+	// copy every parameter before the step
+	std::vector<matrix<float>> params_before;
+	for (const auto &p : net.parameters()) {
+		auto &old = params_before.emplace_back(p.value.rows(), p.value.cols());
+		for (std::size_t r = 0; r < p.value.rows(); ++r) {
+			std::ranges::copy(p.value.row(r), old.row(r).begin());
+		}
+	}
+	// we do not need the return
+	std::ignore = net.forward_backward(x, y);
+
+	opt.step(net.parameters());
+	net.after_update();
+
+	// parameter should differ in at least one value
+	for (const auto &[p, old] : std::views::zip(net.parameters(), params_before)) {
+		bool changed = false;
+		for (std::size_t r = 0; r < p.value.rows(); ++r) {
+			changed |= !std::ranges::equal(p.value.row(r), old.row(r));
+		}
+		EXPECT_TRUE(changed);
+	}
+}
+
+// test4:
+// - each sample gives the same output as when they are in a batch.
+TEST(Training, BatchDoesNotAffectOutput) {
+	constexpr std::size_t samples{6};
+	const TestData data{samples, 8, 4, 1.0, 4};
+	const std::array<std::size_t, 4> sizes{8, 16, 16, 4};
+	// shuffle 
+
+	rho::nn::mlp<float> net{sizes, samples, 4};
+	rho::optim::sgd<float> opt{0.1f};
+
+	const auto x = data.rows(0, samples);
+	const auto y = data.labels(0, samples);
+
+	// We do one step so the biases are not 0
+	std::ignore = net.forward_backward(x, y);
+	opt.step(net.parameters());
+	net.after_update();
+
+	// copy the batch output since the next forward() will overwrite it
+	matrix<float> batch{samples, 4};
+	const auto out = net.forward(x);
+	for (std::size_t r = 0; r < samples; ++r) {
+		std::ranges::copy(out.row(r), batch.row(r).begin());
+	}
+
+	// every row goes through the same calculations
+	// so the outputs should be equal
+	for (std::size_t r = 0; r < samples; ++r) {
+		EXPECT_TRUE(std::ranges::equal(net.forward(data.rows(r, 1)).row(0), batch.row(r)));
+	}
+}
+
