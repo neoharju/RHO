@@ -55,6 +55,7 @@ target_sources(rho_lib
     modules/nn/dense.cppm
     modules/nn/mlp.cppm
     modules/optim/optim.cppm
+    modules/train/trainer.cppm
 )
 
 target_compile_options(rho_lib
@@ -118,7 +119,8 @@ if(RHO_BUILD_TESTS)
     tests/test_normalization.cpp
     tests/test_nn.cpp
     tests/test_rng.cpp
-	tests/test_training.cpp
+    tests/test_training.cpp
+	# tests/test_batch.cpp
   )
 
   target_link_libraries(RHO_tests

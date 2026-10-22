@@ -64,6 +64,10 @@ class mlp {
         return out;
     }
 
+    [[nodiscard]] std::size_t max_batch() const noexcept {
+        return max_batch_;
+    }
+
     void after_update() noexcept {
         for (auto &layer : layers_) {
             layer.refresh_transpose();

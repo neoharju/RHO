@@ -26,6 +26,14 @@ class sgd {
         }
     }
 
+    [[nodiscard]] T learning_rate() const noexcept {
+        return lr_;
+    }
+
+    void set_learning_rate(T lr) noexcept {
+        lr_ = lr;
+    }
+
   private:
     T lr_{};
 };

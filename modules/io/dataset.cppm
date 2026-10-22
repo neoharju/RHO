@@ -1,8 +1,8 @@
 export module rho.io.dataset;
 
 import std;
-import rho.core.memory;
 
+export import rho.core.matrix;
 export import rho.core.rng;
 export import rho.io.idx;
 export import rho.io.normalization;
@@ -118,11 +118,125 @@ normalization compute_normalization(const dataset &ds, std::span<const std::uint
 
     return normalization::from_mean_stddev(mean, std::sqrt(var));
 }
+// -----------------------------------------------------------------------------
 
-// TODO:
-// shuffle data
-// split to training/test/validation
-// batch data for efficiency
-// shuffle data before every epoch, except validation
+// train/validation split
+struct split_ids {
+    std::vector<std::uint32_t> train;
+    std::vector<std::uint32_t> validation;
+};
+
+// ids 0, 1, ... , ds.size() - 1
+[[nodiscard]] std::vector<std::uint32_t> all_ids(const dataset &ds) {
+    std::vector<std::uint32_t> ids(ds.size());
+    std::iota(ids.begin(), ids.end(), 0U);
+    return ids;
+}
+
+// Shuffle the ids
+[[nodiscard]] split_ids train_validation_split(std::uint32_t n,
+                                               std::uint32_t validation_count,
+                                               rho::core::xoshiro256pp &rng) {
+    if (validation_count > n) {
+        throw std::invalid_argument("train_validation_split: validation_count > n");
+    }
+
+    std::vector<std::uint32_t> ids(n);
+    std::iota(ids.begin(), ids.end(), 0U);
+    rho::core::shuffle(ids, rng);
+	// cut the validation part
+    const auto cut = ids.begin() + static_cast<std::ptrdiff_t>(validation_count);
+    split_ids out{{cut, ids.end()}, {ids.begin(), cut}};
+    std::ranges::sort(out.train);
+    std::ranges::sort(out.validation);
+    return out;
+}
+
+// 
+struct batch {
+    rho::core::matrix_view<const float> x; // samples x 784, normalized pixels
+    std::span<const std::uint8_t> y;
+};
+
+enum class sample_order : std::uint8_t {
+    sequential, // the order of the ids (evaluation)
+    shuffled    // a new random order at each epoch (training)
+};
+
+// Makes mini-batches from a set of sample ids of one dataset.
+//
+// each batch copies the uint8 pixels of the samples into one float buffer
+// and normalizes them.
+//
+// last batch of an epoch can have fewer rows than batch_size.
+class batcher {
+  public:
+    batcher(const dataset &ds,
+            std::vector<std::uint32_t> ids,
+            normalization norm,
+            std::size_t batch_size,
+            sample_order order,
+            std::uint64_t seed = 0U)
+        : ds_{&ds}, ids_{std::move(ids)}, norm_{norm}, batch_size_{batch_size}, order_{order},
+          rng_{seed}, x_{batch_size == 0U ? 1U : batch_size, pixels_per_image}, y_(batch_size) {
+        if (batch_size == 0U) {
+            throw std::invalid_argument("batcher: batch_size must be larger than 0");
+        }
+        if (!ids_.empty() && std::ranges::max(ids_) >= ds.size()) {
+            throw std::out_of_range("batcher: a sample id is not in the dataset");
+        }
+    }
+
+	// block rvalue datasets, we do not want to use eg
+	// batcher b(load_mnist(), idx, norm, 64, sample_order::shuffled);
+    batcher(const dataset &&,
+            std::vector<std::uint32_t>,
+            normalization,
+            std::size_t,
+            sample_order,
+            std::uint64_t = 0U) = delete;
+
+    // all batches for one epoch. 
+	// If we have sample_order::shuffled, then also shuffle each time
+    [[nodiscard]] std::generator<const batch &> epoch() {
+		
+        if (order_ == sample_order::shuffled) {
+            rho::core::shuffle(ids_, rng_);
+        }
+
+        for (std::size_t first = 0; first < ids_.size(); first += batch_size_) {
+            const std::size_t count = std::min(batch_size_, ids_.size() - first);
+            const batch b = gather(std::span{ids_}.subspan(first, count));
+            co_yield b;
+        }
+    }
+
+    [[nodiscard]] std::size_t batch_size() const noexcept {
+        return batch_size_;
+    }
+
+  private:
+    // Copy and normalize the samples ids into rows from 0 to ids.size()-1 of x_
+    [[nodiscard]] batch gather(std::span<const std::uint32_t> ids) noexcept {
+        for (std::size_t r = 0; r < ids.size(); ++r) {
+            const auto pixels = ds_->image(ids[r]);
+            const auto row = x_.row(r);
+            for (std::size_t p = 0; p < pixels_per_image; ++p) {
+                row[p] = norm_.apply(pixels[p]);
+            }
+            y_[r] = ds_->label(ids[r]);
+        }
+        return {x_.view().row_range(0, ids.size()), std::span{y_}.first(ids.size())};
+    }
+
+    const dataset *ds_;
+    std::vector<std::uint32_t> ids_;
+    normalization norm_;
+    std::size_t batch_size_;
+    sample_order order_;
+    rho::core::xoshiro256pp rng_;
+    rho::core::matrix<float> x_; // batch_size x 784
+    std::vector<std::uint8_t> y_;
+};
 
 } // namespace rho::io
