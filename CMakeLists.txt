@@ -58,6 +58,13 @@ target_sources(rho_lib
     modules/train/trainer.cppm
 )
 
+# OpenMP for parallel cpu for loops
+find_package(OpenMP REQUIRED)
+target_link_libraries(rho_lib
+	PUBLIC
+	OpenMP::OpenMP_CXX
+)
+
 target_compile_options(rho_lib
   PRIVATE
   -march=native

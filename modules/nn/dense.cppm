@@ -72,6 +72,7 @@ class dense {
                   rho::core::matrix_view<T> dx) noexcept {
 
         // Row i of dW is the sum over the batch of x(r, i) * (row r of dz)
+		#pragma omp parallel for
         for (std::size_t i = 0; i < n_in_; ++i) {
             const auto dw_i = dw_.row(i);
             std::ranges::fill(dw_i, T{0});

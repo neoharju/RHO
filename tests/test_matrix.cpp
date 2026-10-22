@@ -57,6 +57,7 @@ TEST(Matrix, MoveLeavesSourceEmpty) {
 }
 
 TEST(MatrixView, RowRangeStopsOutOfRange) {
+	GTEST_FLAG_SET(death_test_style, "threadsafe");
 	const matrix<int> m{4, 2, aligned_vector<int>{0, 1, 2, 3, 4, 5, 6, 7}};
 
 	EXPECT_DEATH(static_cast<void>(m.view().row_range(3, 2)), "row_range: rows out of range");
