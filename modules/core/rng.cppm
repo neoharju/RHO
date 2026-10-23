@@ -1,64 +1,59 @@
+/// @file rng.cppm
+/// @brief Pseudo-random numbers: xoshiro256++, bounded integers, uniform and normal
+///        values, and a Fisher-Yates shuffle.
+///
+/// The generator is not for cryptography. It is fast and has good statistical
+/// quality for simulation and machine learning.
+///
+/// Sources:
+///  - xoshiro256++: D. Blackman and S. Vigna, http://arxiv.org/pdf/1805.01407 and
+///    https://prng.di.unimi.it/xoshiro256plusplus.c
+///  - splitmix64 (makes the start state from one seed): https://prng.di.unimi.it/splitmix64.c
+///  - Bounded integers without modulo bias (Lemire):
+///    https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+///  - Fast shuffle (Lemire): https://lemire.me/blog/2016/06/30/fast-random-shuffling
+///  - Box-Muller transform: https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
 export module rho.core.rng;
 
 import std;
 
 export namespace rho::core {
-// Implementations
-// ---------------------------------------------------------------
-/* xoshiro256++ (blackman & vigna)
- * http://arxiv.org/pdf/1805.01407
- * https://prng.di.unimi.it/xoshiro256plusplus.c
- *
- *  NB: Addition wraps modulo 2^64 due to uint
- *  result = Add two state words, rotate the result left (bits that fall from
- *   left side come back to right), add the first selected state word again
- *
- * const uint64_t result_plusplus = rotl(s[0] + s[3], R) + s[0];
- * const uint64_t t = s[1] << A;
- * s[2] ^= s[0]; // note: independent dependency paths for s[2] and s[3] for ILP
- * s[3] ^= s[1]; //
- * s[1] ^= s[2];
- * s[0] ^= s[3];
- * s[2] ^= t;
- * s[3] = rotl(s[3], B);
- *
- * xoshiro: xor - shift - rotate - xo-shi-ro; PseudoRNG
- *
- * 256-bits of internal state // the generator has four 64-bit integers: 4 x 64 = 256
- *							  // s[0], s[1], s[2], s[3] // keep as memory
- * ++ output scrambling; (add, rotate), add
- *
- * xoshiro256++ parameters: R=23, A=17, B=45 taken from paper
- *   - A: shift s[1]				   i.e. s[1] << 17;
- *   - B: rotates s[3]				   i.e. rotl(s[3], 45);
- *     - NB: (A, B) define one 256-bit linear transformation, the generator
- *           would change by changing one parameter, which could result in
- *           shorter periods, worse statistical properties etc:
- *           they are algorithm parameter.
- *   - R: rotate sum(s[0], s[3]) by R, i.e. rotl(s[0] + s[3], R)
- *
- *  ---------------------------------------------------------------
- *  splitmix64 for initial state of generators, as recommended in
- *  https://prng.di.unimi.it/
- *  https://prng.di.unimi.it/splitmix64.c
- *
- *  ---------------------------------------------------------------
- *  Lemire's fast random shuffle derived from the Fisher-Yates shuffle, with
- *  rejection sampling to reduce bias.
- *  https://lemire.me/blog/2016/06/30/fast-random-shuffling
- *  https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
- *
- *  ---------------------------------------------------------------
- *  Box-Muller transform for generating normally distributed random numbers
- *  https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
- */
 
+/// @brief xoshiro256++ pseudo-random number generator (Blackman and Vigna).
+///
+/// The state is four 64-bit words (256 bits). The name means xor, shift, rotate.
+/// "++" is the output scrambler: add two words, rotate, add again.
+///
+/// One step of the generator:
+/// @code
+/// result = rotl(s[0] + s[3], R) + s[0];   // all additions wrap modulo 2^64
+/// t      = s[1] << A;
+/// s[2] ^= s[0];   // s[2] and s[3] do not depend on each other,
+/// s[3] ^= s[1];   // so the CPU can do them at the same time (ILP)
+/// s[1] ^= s[2];
+/// s[0] ^= s[3];
+/// s[2] ^= t;
+/// s[3]  = rotl(s[3], B);
+/// @endcode
+///
+/// The paper gives R = 23, A = 17, B = 45. A and B together define one linear
+/// transformation. Do not change them: other values can give a shorter period
+/// or worse statistics.
+///
+/// The period is 2^256 - 1. The all-zero state is not allowed, because the
+/// generator cannot leave it.
 class xoshiro256pp {
   public:
+    /// @return The largest value that next() can return (2^64 - 1).
     static constexpr std::uint64_t max() noexcept {
         return std::numeric_limits<std::uint64_t>::max();
     }
 
+    /// @brief Make the start state from one 64-bit seed with splitmix64.
+    ///
+    /// Equal seeds give equal number sequences. The constructor never makes
+    /// the all-zero state.
+    /// @param seed Any 64-bit value.
     explicit xoshiro256pp(std::uint64_t seed) noexcept {
         std::uint64_t x = seed;
         for (auto &w : s_) {
@@ -71,6 +66,8 @@ class xoshiro256pp {
         }
     }
 
+    /// @brief Advance the state one step.
+    /// @return 64 random bits.
     std::uint64_t next() noexcept {
         const std::uint64_t result = rotl(s_[0] + s_[3], 23) + s_[0];
         const std::uint64_t t = s_[1] << 17U;
@@ -84,36 +81,46 @@ class xoshiro256pp {
         return result;
     }
 
+    /// Same as next(). It lets you call the generator like a function: rng().
     std::uint64_t operator()() noexcept {
         return next();
     }
 
+    /// @brief Advance the state by 2^128 steps.
+    ///
+    /// Use it to make streams that do not overlap, for example one per thread.
     void jump() noexcept {
         apply_jump(jump_poly);
     }
+
+    /// @brief Advance the state by 2^192 steps.
     void long_jump() noexcept {
         apply_jump(long_jump_poly);
     }
 
+    /// @return A copy of this generator, advanced by 2^128 steps. This generator does not change.
     [[nodiscard]] xoshiro256pp jumped() const noexcept {
         xoshiro256pp copy{*this};
         copy.jump();
         return copy;
     }
 
-    // get state
+    /// @return The four state words (for tests and checkpoints).
     [[nodiscard]] std::array<std::uint64_t, 4> state() const noexcept {
         return s_;
     }
 
-    // Lemire's multiply-shift with rejection.
-    // 1. Generate a random 64-bit number x
-    // 2. Cast it to uint 128-bit and multiply with range
-    // 3. the upper 64 bits tells us the random answer
-    // 4. the lower 64 bits tells us wheter the result is slightly biased
-    // 5. If it is biased, get a new number, else return  upper 64 bits
-    // Ref: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-    //      https://lemire.me/blog/2016/06/30/fast-random-shuffling/
+    /// @brief Uniform random integer in [0, range), without modulo bias (Lemire).
+    ///
+    /// How it works:
+    ///  1. Multiply 64 random bits by range. The result has 128 bits.
+    ///  2. The upper 64 bits are the answer.
+    ///  3. The lower 64 bits show if the answer is biased. A biased answer has
+    ///     probability less than range / 2^64. Then we draw a new number.
+    ///
+    /// No division happens in the usual case.
+    /// @param range Number of possible values. If range is 0, the function returns 0.
+    /// @return A value in [0, range).
     std::uint64_t bounded(std::uint64_t range) noexcept {
 
         __uint128_t m = static_cast<__uint128_t>(next()) * range;
@@ -122,6 +129,7 @@ class xoshiro256pp {
         // this is unlikely, since its essentially
         // happends with probability range/2^64
         if (low < range) [[unlikely]] {
+            // threshold = 2^64 mod range
             const std::uint64_t threshold = (max() - range + 1U) % range;
             while (low < threshold) {
                 m = static_cast<__uint128_t>(next()) * range;
@@ -133,26 +141,29 @@ class xoshiro256pp {
         return static_cast<std::uint64_t>(m >> 64U);
     }
 
-    // A double has 1 sign bit, 11 exponent bits, 52 fraction bits
-    // We want the 1. + fraction bits = 1bit + 52 fraction bits = 53 bits
-    // - Every integer from 0 to 2^53 is representable with this
-    // 1. Shift 64 random bits from next() by >>11 to get 53 bits
-    //   1.1 The result is an integer in [0, 2^53-1)
-    // 2. multiply by (1/2^53) which is 0x1.0p-e53 in hexadecimal
-    //
-    // Therefore, we get a number in the range {0, 1/2^53, ..., ((2^53)-1)/(2^53)}
-    // which is thus in the range [0, 1) but it is not uniformly distributed
-    // over all real numbers in [0,1), but over a grid of aforementioned values.
+    /// @brief Uniform double in [0, 1).
+    ///
+    /// A double has 53 bits of precision (52 stored fraction bits + 1 hidden bit).
+    /// We keep the top 53 random bits (next() >> 11) and multiply by 2^-53.
+    /// The result is one of the values {0, 1/2^53, ..., (2^53 - 1)/2^53}.
+    /// So it is uniform on this grid, not on all real numbers in [0, 1).
+    /// @return A value in [0, 1). It can be 0.0. It is never 1.0.
     [[nodiscard]] inline double uniform01() noexcept {
         return static_cast<double>(next() >> 11U) * 0x1.0p-53;
     }
 
-    // this is to scale uniform01 values
+    /// @brief Uniform double in [lo, hi).
+    /// @param lo Lower limit (included).
+    /// @param hi Upper limit (not included). Must be > lo.
     [[nodiscard]] double uniform(double lo, double hi) noexcept {
         return lo + (hi - lo) * uniform01();
     }
 
-    // Box-Muller stateless (discard the other z value; more deterministic sims)
+    /// @brief Standard normal value N(0, 1) with the Box-Muller transform.
+    ///
+    /// Box-Muller makes two values. We use only one and discard the other.
+    /// This keeps the generator stateless, so the sequence is easy to reproduce.
+    /// @return A normally distributed value with mean 0 and variance 1.
     [[nodiscard]] double normal() noexcept {
         constexpr double two_pi{2.0 * std::numbers::pi};
         double u1 = uniform01();
@@ -166,11 +177,13 @@ class xoshiro256pp {
     }
 
   private:
+    /// Rotate x left by k bits. Only for 0 < k < 64 (k = 0 would shift by 64, which is UB).
     static constexpr std::uint64_t rotl(std::uint64_t x, int k) noexcept {
         return (x << static_cast<unsigned>(k)) | (x >> static_cast<unsigned>(64 - k));
     }
 
-    // https://prng.di.unimi.it/splitmix64.c
+    /// splitmix64: advance x and return one well-mixed 64-bit value.
+    /// https://prng.di.unimi.it/splitmix64.c
     static constexpr std::uint64_t splitmix64(std::uint64_t &x) noexcept {
         std::uint64_t z = (x += 0x9E3779B97F4A7C15ULL);
         z = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
@@ -178,7 +191,7 @@ class xoshiro256pp {
         return z ^ (z >> 31U);
     }
 
-    // https://prng.di.unimi.it/xoshiro256plusplus.c
+    /// Jump with a jump polynomial (from https://prng.di.unimi.it/xoshiro256plusplus.c).
     void apply_jump(const std::array<std::uint64_t, 4> &poly) noexcept {
         std::array<std::uint64_t, 4> acc{};
         for (const std::uint64_t word : poly) {
@@ -205,8 +218,13 @@ class xoshiro256pp {
     std::array<std::uint64_t, 4> s_{};
 };
 
-// Fisher-Yates shuffle
-// Ref: https://lemire.me/blog/2016/06/30/fast-random-shuffling/
+/// @brief Put the elements of a range in a uniformly random order (Fisher-Yates).
+///
+/// For i = n-1 down to 1: pick j in [0, i] with bounded(), then swap elements i and j.
+/// Each of the n! orders has the same probability. Time is O(n). No memory is allocated.
+///
+/// @param range A random-access range, for example a std::vector.
+/// @param rng The generator. Its state changes.
 template <std::ranges::random_access_range R>
     requires std::ranges::sized_range<R> && std::permutable<std::ranges::iterator_t<R>>
 void shuffle(R &&range, xoshiro256pp &rng) noexcept {

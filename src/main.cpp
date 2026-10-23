@@ -1,3 +1,9 @@
+/// @file main.cpp
+/// @brief RHO command line program: train an MLP on MNIST and print the test accuracy.
+///
+/// Steps: load the data, split the training set into train and validation parts,
+/// compute the normalization from the train part, train for some epochs, and
+/// evaluate on the test set. All settings are constants in namespace app.
 import std;
 
 import rho.train;
@@ -7,9 +13,9 @@ namespace app {
 	// namespace fs; using fs?
 	namespace fs = std::filesystem;
 
-	// Setting
-	constexpr std::string_view data_dir{"data"};
-	// e.g. sequential Dense Network in pytorch
+	// Settings
+	constexpr std::string_view data_dir{"data"}; // relative to the current directory
+	// Layer widths, like a sequential dense network in PyTorch
 	constexpr std::array<std::size_t, 4> layer_sizes{
 		rho::io::pixels_per_image, 
 			256, 
@@ -27,7 +33,7 @@ namespace app {
 	static_assert(epochs > 0U && batch_size > 0U);
 	static_assert(learning_rate > 0.0f && lr_decay > 0.0f);
 
-	// Error types
+	// Error types of the program
 	struct DatasetError {
 		rho::io::Error error; // cannot read an MNIST file, or it has bad contents
 	};
@@ -37,6 +43,7 @@ namespace app {
 	};
 	using Error = std::variant<DatasetError, ValidationSizeError>;
 
+	/// @brief Print a human-readable message for an error to std::cerr.
 	void display_error(const Error &error) {
 		constexpr auto visitor = rho::io::match{
 			[](const DatasetError &e) { rho::io::display_error(e.error); },
@@ -51,7 +58,9 @@ namespace app {
 		std::visit(visitor, error);
 	}
 
-	// Load data from data-folder
+	/// @brief Load one MNIST set from data_dir.
+	/// @param name File name prefix: "train" or "t10k".
+	/// @return The dataset, or a DatasetError.
 	[[nodiscard]] std::expected<rho::io::dataset, Error> load(std::string_view name) {
 		const fs::path dir{data_dir};
 		return rho::io::dataset::load(dir / std::format("{}-images-idx3-ubyte", name),
@@ -59,6 +68,8 @@ namespace app {
 			.transform_error([](rho::io::Error e) -> Error { return DatasetError{std::move(e)}; });
 	}
 
+	/// @brief Run the full program: load, split, normalize, train, evaluate.
+	/// @return Nothing on success, or the first Error.
 	[[nodiscard]] std::expected<void, Error> run() {
 		const auto train_set = load("train");
 		if (!train_set) {
@@ -72,12 +83,14 @@ namespace app {
 			return std::unexpected(ValidationSizeError{validation_size, train_set->size()});
 		}
 
+		// One master seed makes all other seeds, so one number reproduces the full run.
 		rho::core::xoshiro256pp seeds{seed};
 		rho::core::xoshiro256pp split_rng{seeds()};
 		const std::uint64_t net_seed = seeds();
 		const std::uint64_t shuffle_seed = seeds();
 
 		auto ids = rho::io::train_validation_split(train_set->size(), validation_size, split_rng);
+		// Statistics from the train part only, so validation and test data do not leak into training.
 		const auto norm = rho::io::compute_normalization(*train_set, ids.train);
 
 		std::println("Network {}: {} train, {} validation, {} test samples",
@@ -127,6 +140,7 @@ namespace app {
 
 } // namespace app
 
+/// @return 0 on success, 1 on error.
 int main() {
 	if (const auto result = app::run(); !result) {
 		app::display_error(result.error());

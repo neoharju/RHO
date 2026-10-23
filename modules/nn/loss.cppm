@@ -1,3 +1,38 @@
+/// @file loss.cppm
+/// @brief Softmax, cross-entropy, the fused softmax + cross-entropy with its gradient,
+///        and accuracy helpers.
+///
+/// Math (one sample i, logits z_i, true class y_i, N samples in the batch):
+///
+///   softmax:        p_{i,k} = exp(z_{i,k}) / sum_j exp(z_{i,j})
+///   cross-entropy:  CE_i    = -log(p_{i,y_i})
+///   batch loss:     L       = (1/N) * sum_i CE_i
+///
+/// Put softmax into CE:
+///
+///   CE_i = -log( exp(z_{i,y_i}) / sum_j exp(z_{i,j}) )
+///        = log(sum_j exp(z_{i,j})) - z_{i,y_i}
+///        = LSE(z_i) - z_{i,y_i}                      (LSE = log-sum-exp)
+///
+/// Numerical stability: exp(1000) overflows. Let m = max_j z_{i,j}. Then
+///
+///   LSE(z_i) = m + log(sum_j exp(z_{i,j} - m))
+///
+/// All exponents are <= 0, so exp() cannot overflow, and the largest term is 1,
+/// so the sum is >= 1 and log() is finite. We compute
+///
+///   CE_i = (m - z_{i,y_i}) + log(sum_j exp(z_{i,j} - m))
+///
+/// Gradient. Let S = sum_j exp(z_{i,j}).
+///
+///   d LSE / d z_{i,k} = exp(z_{i,k}) / S = p_{i,k}     (the derivative of LSE is softmax)
+///   d(-z_{i,y_i}) / d z_{i,k} = -[k == y_i]             (minus the one-hot vector)
+///
+/// So dCE_i / dz_{i,k} = p_{i,k} - [k == y_i], and for the mean loss
+///
+///   dL / dz_{i,k} = (p_{i,k} - [k == y_i]) / N
+///
+/// "Predicted minus target, divided by the batch size."
 export module rho.nn.loss;
 
 import std;
@@ -6,78 +41,10 @@ import rho.core.matrix;
 
 export namespace rho::nn {
 
-// softmax(z_i) = exp(z_i) / Sum (exp(z_j)) from j=1 to n
-//
-// Cross-Entropy (CE) = -Sum (y_i * log(\hat{y}_i)) from i=1 to n
-// where y are the true label vector elements (one-hot encoded), and \hat{y}
-// are the predicted probability vector elements
-//
-// We get loss by computing the sum of cross-entropy of the softmax(logits) and
-// dividing by the sample size, where logits are raw scores from the model,
-// and probabilities = softmax(logits)
-//
-// Thus, loss_i = cross-entropy_i(probabilities, true labels)
-//
-// And for a batch of size N we get the mean-reduced loss:
-//              loss = sum( CE_i() ) / N     from i to N
-//
-//
-// Then for a single sample: CE_i = -log(probability_{i,y_i})
-// Substituting softmax in,
-//              CE_i = -log(exp(z_{i,y_i} / sum(exp(z_{i,j}))))
-//				CE_i = log(sum(exp(z_{i,j}))) - log(exp(z_{i,y_i})))
-//				CE_i = log(sum(exp(z_{i,j}))) - z_{i, y_i}
-//	            CE_i = LSE(Z_i) - z_{i, y_i}
-//
-// We will also do a to trick for numerical stability:
-//	LSE(Z_i) = log(sum(exp(z_{i,j})))
-//	LSE(Z_i) = log(exp(m) * sum(exp(z_{i,j} - m)))
-//	LSE(Z_i) = m + log(sum(exp(z_{i,j} - m)))
-//
-//	where m = max_i (z_i) = max_z , largest z element in vector Z
-//
-//  And change the order slightly, to make log(sum()) more significant
-//  numerically
-//
-//   CE_i = (max_z - z_i{i, y_i}) + log(sum(exp(z_{i,j} - m)))
-//
-// -------------------------------------------------------------------
-// --- Gradient ------------------------------------------------------
-// -------------------------------------------------------------------
-// Starting from
-//
-//	            CE_i = LSE(Z_i) - z_{i, y_i}
-//
-//	we differentiate the two terms separetely.
-//
-//	1. Let S = sum_j (exp(z{i,j}), so LSE = log(S), then
-//
-//			d/dz_{i,k} LSE(Z_i) = (1/S) * dS/dz_{i,k}
-//								= (1/S) * exp(z_{i,k})
-//								= exp(z_{i,k}) / (sum_j(exp(z_{i,j})))
-//								= p_{i,k}
-//
-//	   So, the derivative of log-sum-exp is actually softmax.
-//
-//	2. This is simply the true-class logit:
-//
-//			d/dz{i,k} ( -z_{i,y_i} ) = -[k == y_i]
-//
-//	   i.e. one-hot vector y
-//
-//	Thus we get:
-//
-//		dCE_i / dz_{i,k} = p_{i,k} - [k == y_i]
-//
-//  And since batch loss is the mean, L = (1/N) sum_i ( CE_i )
-//
-//					dL/dz_ij = (p_j − [j == y_i]) / N
-//
-//	"predicted minus target, averaged over the batch"
-//
-//	So we need to find dCE_i/dz{i,k} for one row, then scale by 1/N
-//
-
+/// @brief Softmax of each row, with the max-subtraction trick (no overflow).
+/// @param logits Input, N x C.
+/// @param probabilities Output, N x C. Each row is > 0 and sums to 1.
+/// @pre Same shape. logits.cols() >= 1.
 template <class T>
 void softmax(rho::core::matrix_view<const T> logits, rho::core::matrix_view<T> probabilities) {
     for (std::size_t i = 0; i < logits.rows(); ++i) {
@@ -103,6 +70,15 @@ void softmax(rho::core::matrix_view<const T> logits, rho::core::matrix_view<T> p
     }
 }
 
+/// @brief Mean cross-entropy of probabilities: -(1/N) * sum_i log(p_{i, y_i}).
+///
+/// For training, use softmax_cross_entropy() instead. It is more stable: here
+/// a probability that is 0 after rounding gives +inf.
+///
+/// @param probabilities N x C, each row sums to 1.
+/// @param labels N class indices, each < C.
+/// @return The mean loss.
+/// @pre labels.size() == probabilities.rows() and N > 0.
 template <class T, class U>
 [[nodiscard]] T cross_entropy(rho::core::matrix_view<const T> probabilities,
                               std::span<const U> labels) {
@@ -119,8 +95,17 @@ template <class T, class U>
     return loss / static_cast<T>(probabilities.rows());
 }
 
-// fused cross_entropy( softmax ) for efficiency
-// Return: mean loss over samples
+/// @brief Fused softmax + cross-entropy, and optionally its gradient.
+///
+/// One pass over the logits gives the loss. If dlogits is not empty, the same
+/// pass also writes dL/dz = (softmax(z) - onehot(y)) / N. The probabilities are
+/// never stored, so this needs less memory traffic than softmax() + cross_entropy().
+///
+/// @param logits Raw scores, N x C.
+/// @param labels N class indices, each < C.
+/// @param dlogits Output N x C for the gradient, or an empty view to skip it.
+/// @return Mean loss over the N samples.
+/// @pre labels.size() == logits.rows() and N > 0. dlogits is empty or N x C.
 template <class T, class U>
 [[nodiscard]] T softmax_cross_entropy(rho::core::matrix_view<const T> logits,
                                       std::span<const U> labels,
@@ -164,6 +149,10 @@ template <class T, class U>
     return loss_sum * inv_samples;
 }
 
+/// @brief Index of the largest score in row i (the predicted class).
+///
+/// If two scores are equal, the smaller index wins.
+/// @pre i < scores.rows() and scores.cols() >= 1.
 template <class T>
 [[nodiscard]] std::size_t argmax_row(rho::core::matrix_view<const T> scores,
                                      std::size_t i) noexcept {
@@ -171,6 +160,10 @@ template <class T>
     return static_cast<std::size_t>(std::ranges::max_element(row) - row.begin());
 }
 
+/// @brief Number of rows where the predicted class (argmax) is equal to the label.
+/// @param scores N x C (logits or probabilities).
+/// @param labels N labels.
+/// @pre labels.size() >= scores.rows().
 template <class T>
 [[nodiscard]] std::size_t count_correct(rho::core::matrix_view<const T> scores,
                                         std::span<const std::uint8_t> labels) noexcept {

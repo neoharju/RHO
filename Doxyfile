@@ -1,0 +1,20 @@
+# Minimal Doxygen configuration for RHO.
+# Run "doxygen" in the project root. The HTML output goes to build-docs/html/index.html.
+PROJECT_NAME           = "RHO"
+PROJECT_BRIEF          = "MNIST digit classifier: an MLP in modern C++ from scratch"
+OUTPUT_DIRECTORY       = build-docs
+INPUT                  = modules src README.md docs
+FILE_PATTERNS          = *.cppm *.cpp *.md
+EXTENSION_MAPPING      = cppm=C++
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+JAVADOC_AUTOBRIEF      = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+SOURCE_BROWSER         = YES
+WARN_IF_UNDOCUMENTED   = NO
+QUIET                  = YES
+HAVE_DOT               = NO

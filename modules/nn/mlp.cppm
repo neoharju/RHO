@@ -1,4 +1,6 @@
-
+/// @file mlp.cppm
+/// @brief Multilayer perceptron: dense layers with ReLU between them, and a
+///        softmax cross-entropy loss at the end.
 export module rho.nn.mlp;
 
 import std;
@@ -9,15 +11,37 @@ export import rho.nn.loss;
 
 export namespace rho::nn {
 
+/// @brief One trainable parameter and its gradient, as views.
+///
+/// The optimizer uses it: value -= lr * grad. Both views have the same shape.
 template <class T>
 struct param_ref {
     rho::core::matrix_view<T> value;
     rho::core::matrix_view<T> grad;
 };
 
+/// @brief Multilayer perceptron (MLP) for classification.
+///
+/// For sizes {784, 256, 128, 10} the network is
+/// @code
+/// x -> dense(784, 256) -> ReLU -> dense(256, 128) -> ReLU -> dense(128, 10) -> logits
+/// @endcode
+///
+/// All activation and gradient buffers are allocated one time in the constructor,
+/// for max_batch rows. forward() and forward_backward() do not allocate memory.
+///
+/// @tparam T Element type (float or double).
 template <class T>
 class mlp {
   public:
+    /// @brief Make the network and set random start weights.
+    ///
+    /// Hidden layers use He initialization (for ReLU). The output layer uses Glorot.
+    ///
+    /// @param sizes Layer widths: {inputs, hidden..., outputs}.
+    /// @param max_batch The largest batch that forward() will get.
+    /// @param seed Seed for the weights. The same seed gives the same network.
+    /// @pre sizes.size() >= 2 and all sizes > 0.
     mlp(std::span<const std::size_t> sizes, std::size_t max_batch, std::uint64_t seed)
         : max_batch_{max_batch} {
         const std::size_t n_layers = sizes.size() - 1U;
@@ -51,10 +75,12 @@ class mlp {
         }
     }
 
+    /// @return All parameters (W and b of each layer) with their gradients, for the optimizer.
     [[nodiscard]] std::span<param_ref<T>> parameters() noexcept {
         return params_;
     }
 
+    /// @return The layer widths, for example {784, 256, 128, 10}.
     [[nodiscard]] std::vector<std::size_t> topology() const {
         std::vector<std::size_t> out;
         out.push_back(layers_.front().n_in());
@@ -64,16 +90,24 @@ class mlp {
         return out;
     }
 
+    /// @return The largest batch size that the buffers can hold.
     [[nodiscard]] std::size_t max_batch() const noexcept {
         return max_batch_;
     }
 
+    /// @brief Update the cached W^T of each layer.
+    /// @warning Call it after each optimizer step. If you do not, the next
+    ///          forward_backward() computes wrong gradients for the hidden layers.
     void after_update() noexcept {
         for (auto &layer : layers_) {
             layer.refresh_transpose();
         }
     }
 
+    /// @brief Forward pass.
+    /// @param x Input batch, B x sizes[0], B <= max_batch().
+    /// @return View of the logits (B x outputs). It is valid until the next forward().
+    /// @pre x.rows() <= max_batch() and x.cols() == sizes[0].
     [[nodiscard]] rho::core::matrix_view<const T>
     forward(rho::core::matrix_view<const T> x) noexcept {
         const std::size_t b = x.rows();
@@ -94,17 +128,34 @@ class mlp {
         return logits;
     }
 
+    /// @return The logits of the last forward pass.
     [[nodiscard]] rho::core::matrix_view<const T> logits() noexcept {
         return first_rows(z_.back(), batch_);
     }
 
-    // Forward pass and loss
+    /// @brief Forward pass and mean loss. No gradients.
+    /// @param x Input batch, B x sizes[0].
+    /// @param labels B labels.
+    /// @return Mean softmax cross-entropy loss.
     [[nodiscard]] T loss(rho::core::matrix_view<const T> x,
                          std::span<const std::uint8_t> labels) noexcept {
         return softmax_cross_entropy<T>(forward(x), labels, rho::core::matrix_view<T>{});
     }
 
-    // Forward pass, loss, and backpropagation
+    /// @brief Forward pass, loss, and backpropagation.
+    ///
+    /// After the call, the gradient views in parameters() hold dL/dW and dL/db
+    /// for this batch (batch means). logits() holds the logits of this batch.
+    ///
+    /// Backpropagation, from the top layer l = L-1 down to 1:
+    ///   d_[l]      = dL/dz_l   (for the top layer: from softmax_cross_entropy)
+    ///   dx_[l]     = d_[l] * W_l^T            (in dense::backward)
+    ///   d_[l - 1]  = dx_[l] * ReLU'(z_{l-1})  (in relu_backward)
+    /// The first layer computes only dW and db.
+    ///
+    /// @param x Input batch, B x sizes[0].
+    /// @param labels B labels.
+    /// @return Mean loss of the batch (before the update).
     [[nodiscard]] T forward_backward(rho::core::matrix_view<const T> x,
                                      std::span<const std::uint8_t> labels) noexcept {
         const auto logits = forward(x);
@@ -123,6 +174,7 @@ class mlp {
     }
 
   private:
+    /// The first n rows of m. Stops the program if n > m.rows().
     [[nodiscard]] static rho::core::matrix_view<T> first_rows(rho::core::matrix<T> &m,
                                                               std::size_t n) noexcept {
         return m.view().row_range(0, n);
@@ -133,9 +185,9 @@ class mlp {
     std::vector<rho::core::matrix<T>> a_;  // after ReLU, hidden layers only
     std::vector<rho::core::matrix<T>> d_;  // loss gradient at each layers output
     std::vector<rho::core::matrix<T>> dx_; // loss gradient at each layers input
-    std::vector<param_ref<T>> params_;
+    std::vector<param_ref<T>> params_;     // views into layers_ (heap data, stable on move)
     std::size_t max_batch_ = 0U;
-    std::size_t batch_ = 0U;
+    std::size_t batch_ = 0U;               // rows of the last forward()
 };
 
 } // namespace rho::nn

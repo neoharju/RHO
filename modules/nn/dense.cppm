@@ -1,3 +1,5 @@
+/// @file dense.cppm
+/// @brief Fully connected (dense) layer: z = x * W + b.
 export module rho.nn.dense;
 
 import std;
@@ -8,16 +10,33 @@ export import rho.linalg.gemm;
 
 export namespace rho::nn {
 
-// init starting weights
+/// How to set the start values of the weights.
 enum class init_scheme : std::uint8_t {
-    he_normal,
-    glorot_uniform
+    he_normal,     ///< Normal(0, sqrt(2 / n_in)). Use it before a ReLU.
+    glorot_uniform ///< Uniform(-a, a), a = sqrt(6 / (n_in + n_out)). Use it for the output layer.
 };
 
-// A fully connected layer: z = x * W + b.
+/// @brief A fully connected layer: z = x * W + b.
+///
+/// Shapes (B = number of samples in the batch):
+///  - x: B x n_in (input), W: n_in x n_out, b: 1 x n_out, z: B x n_out.
+///
+/// The layer owns its parameters (W, b) and their gradients (dW, db).
+/// It also keeps a copy of W^T, because then dx = dz * W^T is a normal GEMM
+/// with rows in memory order. The first layer does not need dx, so it has no W^T.
+///
+/// @warning After each change of W (an optimizer step), call refresh_transpose().
+///          If you do not, backward() uses the old W^T and dx is wrong.
+///
+/// @tparam T Element type (float or double).
 template <class T>
 class dense {
   public:
+    /// @brief Make a layer. All parameters and gradients are 0. Call initialize() next.
+    /// @param n_in Number of inputs.
+    /// @param n_out Number of outputs.
+    /// @param needs_input_grad If true, backward() can compute dx (the layer keeps W^T).
+    ///        Use false for the first layer, because nothing comes before it.
     dense(std::size_t n_in, std::size_t n_out, bool needs_input_grad = true)
         : w_{n_in, n_out},
           wt_{needs_input_grad ? rho::core::matrix<T>{n_out, n_in} : rho::core::matrix<T>{}},
@@ -30,16 +49,22 @@ class dense {
         db_.fill(T{0});
     }
 
+    /// @return Number of inputs.
     [[nodiscard]] std::size_t n_in() const noexcept {
         return n_in_;
     }
+    /// @return Number of outputs.
     [[nodiscard]] std::size_t n_out() const noexcept {
         return n_out_;
     }
 
-    // He: normal(0, sqrt(2 / n_in)), for hidden layers followed by ReLU.
-    // Glorot: uniform(-a, a), a = sqrt(6 / (n_in + n_out)), for the output layer.
-    // Biases at 0
+    /// @brief Set random start weights, set the biases to 0, and update W^T.
+    ///
+    /// He: normal(0, sqrt(2 / n_in)), for hidden layers followed by ReLU.
+    /// Glorot: uniform(-a, a), a = sqrt(6 / (n_in + n_out)), for the output layer.
+    ///
+    /// @param scheme The distribution of the weights.
+    /// @param rng The generator. The same seed gives the same weights.
     void initialize(init_scheme scheme, rho::core::xoshiro256pp &rng) noexcept {
         const double he_sd = std::sqrt(2.0 / static_cast<double>(n_in_));
         const double glorot = std::sqrt(6.0 / static_cast<double>(n_in_ + n_out_));
@@ -53,8 +78,14 @@ class dense {
         refresh_transpose();
     }
 
-    // z = x * W + b. z starts as the bias and gemm adds x * W 
-    // Shapes: x is B x n_in, z is B x n_out (mlp sizes its buffers this way)
+    /// @brief Forward pass: z = x * W + b.
+    ///
+    /// Each row of z is first set to b. Then gemm adds x * W.
+    /// So the bias addition costs no extra pass over z.
+    ///
+    /// @param x Input, B x n_in.
+    /// @param z Output, B x n_out.
+    /// @pre x.cols() == n_in(), z.rows() == x.rows(), z.cols() == n_out().
     void forward(rho::core::matrix_view<const T> x, rho::core::matrix_view<T> z) const noexcept {
         const auto bias = b_.row(0U);
         for (std::size_t r = 0; r < z.rows(); ++r) {
@@ -63,16 +94,25 @@ class dense {
         rho::linalg::gemm<T>(x, w_.view(), z);
     }
 
-    // From dz = dL/dz (B x n_out):
-    //   dW = x^T * dz
-    //   db = column sums of dz
-    //   dx = dz * W^T, the gradient for the layer below (skipped if dx is empty)
+    /// @brief Backward pass. It computes the gradients from dz = dL/dz.
+    ///
+    ///  - dW = x^T * dz   (stored in the layer, see grad_weights())
+    ///  - db = sum of the rows of dz   (stored in the layer, see grad_bias_matrix())
+    ///  - dx = dz * W^T   (the gradient for the layer below; skipped if dx is empty)
+    ///
+    /// The old values of dW and db are overwritten (not added to).
+    ///
+    /// @param x The input of the forward pass, B x n_in.
+    /// @param dz Gradient of the loss with respect to z, B x n_out.
+    /// @param dx Output, B x n_in, or an empty view (0 rows) if not needed.
+    /// @pre The layer was made with needs_input_grad == true if dx is not empty.
     void backward(rho::core::matrix_view<const T> x,
                   rho::core::matrix_view<const T> dz,
                   rho::core::matrix_view<T> dx) noexcept {
 
-        // Row i of dW is the sum over the batch of x(r, i) * (row r of dz)
-		#pragma omp parallel for
+        // Row i of dW is the sum over the batch of x(r, i) * (row r of dz).
+        // Each thread writes its own rows of dW, so there is no data race.
+#pragma omp parallel for
         for (std::size_t i = 0; i < n_in_; ++i) {
             const auto dw_i = dw_.row(i);
             std::ranges::fill(dw_i, T{0});
@@ -102,6 +142,9 @@ class dense {
         }
     }
 
+    /// @brief Copy W into W^T. Call it after each change of W.
+    ///
+    /// It does nothing for a layer without W^T (needs_input_grad == false).
     void refresh_transpose() noexcept {
         if (wt_.rows() == 0U) { // no W^T (needs input grad == false, e.g. layer 0)
             return;
@@ -109,15 +152,19 @@ class dense {
         rho::linalg::transpose<T>(w_.view(), wt_.view());
     }
 
+    /// @return Writable view of W (n_in x n_out). The optimizer changes it.
     [[nodiscard]] rho::core::matrix_view<T> weights() noexcept {
         return w_.view();
     }
+    /// @return View of dW (n_in x n_out), as computed by the last backward().
     [[nodiscard]] rho::core::matrix_view<T> grad_weights() noexcept {
         return dw_.view();
     }
+    /// @return Writable view of b (1 x n_out).
     [[nodiscard]] rho::core::matrix_view<T> bias_matrix() noexcept {
         return b_.view();
     }
+    /// @return View of db (1 x n_out), as computed by the last backward().
     [[nodiscard]] rho::core::matrix_view<T> grad_bias_matrix() noexcept {
         return db_.view();
     }
