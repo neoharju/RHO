@@ -69,7 +69,7 @@ class xoshiro256pp {
     /// @brief Advance the state one step.
     /// @return 64 random bits.
     std::uint64_t next() noexcept {
-        const std::uint64_t result = rotl(s_[0] + s_[3], 23) + s_[0];
+        const std::uint64_t result = std::rotl(s_[0] + s_[3], 23) + s_[0];
         const std::uint64_t t = s_[1] << 17U;
 
         s_[2] ^= s_[0];
@@ -77,7 +77,7 @@ class xoshiro256pp {
         s_[1] ^= s_[2];
         s_[0] ^= s_[3];
         s_[2] ^= t;
-        s_[3] = rotl(s_[3], 45);
+        s_[3] = std::rotl(s_[3], 45);
         return result;
     }
 
@@ -177,11 +177,6 @@ class xoshiro256pp {
     }
 
   private:
-    /// Rotate x left by k bits. Only for 0 < k < 64 (k = 0 would shift by 64, which is UB).
-    static constexpr std::uint64_t rotl(std::uint64_t x, int k) noexcept {
-        return (x << static_cast<unsigned>(k)) | (x >> static_cast<unsigned>(64 - k));
-    }
-
     /// splitmix64: advance x and return one well-mixed 64-bit value.
     /// https://prng.di.unimi.it/splitmix64.c
     static constexpr std::uint64_t splitmix64(std::uint64_t &x) noexcept {

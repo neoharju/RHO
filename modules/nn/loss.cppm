@@ -78,10 +78,12 @@ void softmax(rho::core::matrix_view<const T> logits, rho::core::matrix_view<T> p
 /// @param probabilities N x C, each row sums to 1.
 /// @param labels N class indices, each < C.
 /// @return The mean loss.
-/// @pre labels.size() == probabilities.rows() and N > 0.
+/// @pre labels.size() == probabilities.rows() and N > 0. If not, the program stops.
 template <class T, class U>
 [[nodiscard]] T cross_entropy(rho::core::matrix_view<const T> probabilities,
                               std::span<const U> labels) {
+    rho::core::require(probabilities.rows() > 0U && labels.size() == probabilities.rows(),
+                       "cross_entropy: need N > 0 rows and N labels");
 
     T loss{0};
     // assume the probabilities are normalized
@@ -105,7 +107,8 @@ template <class T, class U>
 /// @param labels N class indices, each < C.
 /// @param dlogits Output N x C for the gradient, or an empty view to skip it.
 /// @return Mean loss over the N samples.
-/// @pre labels.size() == logits.rows() and N > 0. dlogits is empty or N x C.
+/// @pre labels.size() == logits.rows(), N > 0, each label < C, and dlogits is empty
+///      or N x C. If not, the program stops (a bad label would read out of bounds).
 template <class T, class U>
 [[nodiscard]] T softmax_cross_entropy(rho::core::matrix_view<const T> logits,
                                       std::span<const U> labels,
@@ -114,6 +117,11 @@ template <class T, class U>
     // (samples, classes)
     const std::size_t samples = logits.rows();
     const std::size_t classes = logits.cols();
+    rho::core::require(samples > 0U && classes > 0U && labels.size() == samples,
+                       "softmax_cross_entropy: need N > 0 rows, C > 0 columns and N labels");
+    rho::core::require(dlogits.rows() == 0U
+                           || (dlogits.rows() == samples && dlogits.cols() == classes),
+                       "softmax_cross_entropy: dlogits must be empty or N x C");
     const T inv_samples = T{1} / static_cast<T>(samples);
     const bool take_grad = dlogits.rows() != 0U;
     T loss_sum{0};
@@ -121,6 +129,7 @@ template <class T, class U>
     for (std::size_t i = 0; i < samples; ++i) {
         const auto z_i = logits.row(i);
         const std::size_t true_y = static_cast<std::size_t>(labels[i]);
+        rho::core::require(true_y < classes, "softmax_cross_entropy: label >= number of classes");
 
         T max_z = z_i[0];
         for (std::size_t j = 1; j < classes; ++j) {
@@ -163,10 +172,11 @@ template <class T>
 /// @brief Number of rows where the predicted class (argmax) is equal to the label.
 /// @param scores N x C (logits or probabilities).
 /// @param labels N labels.
-/// @pre labels.size() >= scores.rows().
+/// @pre labels.size() >= scores.rows(). If not, the program stops.
 template <class T>
 [[nodiscard]] std::size_t count_correct(rho::core::matrix_view<const T> scores,
                                         std::span<const std::uint8_t> labels) noexcept {
+    rho::core::require(labels.size() >= scores.rows(), "count_correct: fewer labels than rows");
     std::size_t correct{};
 
     for (std::size_t i = 0; i < scores.rows(); ++i) {

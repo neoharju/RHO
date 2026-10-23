@@ -24,11 +24,14 @@ export namespace rho::linalg {
 /// @param B Input, k x n.
 /// @param C Input and output, m x n. On return C = C + A * B.
 /// @pre A.cols() == B.rows(), C.rows() == A.rows(), C.cols() == B.cols().
+///      If not, the program stops (see require()).
 /// @pre C does not overlap A or B.
 template <class T>
 void gemm(rho::core::matrix_view<const T> A,
           rho::core::matrix_view<const T> B,
           rho::core::matrix_view<T> C) noexcept {
+    rho::core::require(A.cols() == B.rows() && C.rows() == A.rows() && C.cols() == B.cols(),
+                       "gemm: shapes do not match (A: m x k, B: k x n, C: m x n)");
 
     const auto m = A.rows();
     const auto k = A.cols();
@@ -58,9 +61,11 @@ void gemm(rho::core::matrix_view<const T> A,
 ///
 /// @param src Input, r x c.
 /// @param dst Output, c x r.
-/// @pre dst.rows() == src.cols() and dst.cols() == src.rows().
+/// @pre dst.rows() == src.cols() and dst.cols() == src.rows(). If not, the program stops.
 template <class T>
 void transpose(rho::core::matrix_view<const T> src, rho::core::matrix_view<T> dst) noexcept {
+    rho::core::require(dst.rows() == src.cols() && dst.cols() == src.rows(),
+                       "transpose: dst must be src.cols() x src.rows()");
 #pragma omp parallel for
     for (std::size_t i = 0; i < src.rows(); ++i) {
         for (std::size_t j = 0; j < src.cols(); ++j) {

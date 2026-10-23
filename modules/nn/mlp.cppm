@@ -41,9 +41,9 @@ class mlp {
     /// @param sizes Layer widths: {inputs, hidden..., outputs}.
     /// @param max_batch The largest batch that forward() will get.
     /// @param seed Seed for the weights. The same seed gives the same network.
-    /// @pre sizes.size() >= 2 and all sizes > 0.
+    /// @throws std::invalid_argument if sizes.size() < 2, a size is 0, or max_batch is 0.
     mlp(std::span<const std::size_t> sizes, std::size_t max_batch, std::uint64_t seed)
-        : max_batch_{max_batch} {
+        : max_batch_{check_topology(sizes, max_batch)} {
         const std::size_t n_layers = sizes.size() - 1U;
 
         layers_.reserve(n_layers);
@@ -95,19 +95,10 @@ class mlp {
         return max_batch_;
     }
 
-    /// @brief Update the cached W^T of each layer.
-    /// @warning Call it after each optimizer step. If you do not, the next
-    ///          forward_backward() computes wrong gradients for the hidden layers.
-    void after_update() noexcept {
-        for (auto &layer : layers_) {
-            layer.refresh_transpose();
-        }
-    }
-
     /// @brief Forward pass.
     /// @param x Input batch, B x sizes[0], B <= max_batch().
     /// @return View of the logits (B x outputs). It is valid until the next forward().
-    /// @pre x.rows() <= max_batch() and x.cols() == sizes[0].
+    /// @pre x.rows() <= max_batch() and x.cols() == sizes[0]. If not, the program stops.
     [[nodiscard]] rho::core::matrix_view<const T>
     forward(rho::core::matrix_view<const T> x) noexcept {
         const std::size_t b = x.rows();
@@ -135,8 +126,9 @@ class mlp {
 
     /// @brief Forward pass and mean loss. No gradients.
     /// @param x Input batch, B x sizes[0].
-    /// @param labels B labels.
+    /// @param labels B labels, each < number of outputs.
     /// @return Mean softmax cross-entropy loss.
+    /// @pre B > 0 and labels.size() == B. If not, the program stops.
     [[nodiscard]] T loss(rho::core::matrix_view<const T> x,
                          std::span<const std::uint8_t> labels) noexcept {
         return softmax_cross_entropy<T>(forward(x), labels, rho::core::matrix_view<T>{});
@@ -154,8 +146,9 @@ class mlp {
     /// The first layer computes only dW and db.
     ///
     /// @param x Input batch, B x sizes[0].
-    /// @param labels B labels.
+    /// @param labels B labels, each < number of outputs.
     /// @return Mean loss of the batch (before the update).
+    /// @pre B > 0 and labels.size() == B. If not, the program stops.
     [[nodiscard]] T forward_backward(rho::core::matrix_view<const T> x,
                                      std::span<const std::uint8_t> labels) noexcept {
         const auto logits = forward(x);
@@ -174,6 +167,19 @@ class mlp {
     }
 
   private:
+    /// Check the constructor arguments. It runs in the member initializer list,
+    /// so the constructor body never sees a bad topology.
+    /// @return max_batch.
+    static std::size_t check_topology(std::span<const std::size_t> sizes, std::size_t max_batch) {
+        if (sizes.size() < 2U) {
+            throw std::invalid_argument("mlp: sizes needs at least an input and an output size");
+        }
+        if (std::ranges::contains(sizes, std::size_t{0}) || max_batch == 0U) {
+            throw std::invalid_argument("mlp: layer sizes and max_batch must be larger than 0");
+        }
+        return max_batch;
+    }
+
     /// The first n rows of m. Stops the program if n > m.rows().
     [[nodiscard]] static rho::core::matrix_view<T> first_rows(rho::core::matrix<T> &m,
                                                               std::size_t n) noexcept {

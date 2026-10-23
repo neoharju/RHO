@@ -24,9 +24,8 @@ enum class init_scheme : std::uint8_t {
 /// The layer owns its parameters (W, b) and their gradients (dW, db).
 /// It also keeps a copy of W^T, because then dx = dz * W^T is a normal GEMM
 /// with rows in memory order. The first layer does not need dx, so it has no W^T.
-///
-/// @warning After each change of W (an optimizer step), call refresh_transpose().
-///          If you do not, backward() uses the old W^T and dx is wrong.
+/// backward() updates W^T from W before it uses it, so W^T can never be out of date
+/// after an optimizer step. The copy costs O(n_in * n_out), much less than the GEMMs.
 ///
 /// @tparam T Element type (float or double).
 template <class T>
@@ -58,7 +57,7 @@ class dense {
         return n_out_;
     }
 
-    /// @brief Set random start weights, set the biases to 0, and update W^T.
+    /// @brief Set random start weights and set the biases to 0.
     ///
     /// He: normal(0, sqrt(2 / n_in)), for hidden layers followed by ReLU.
     /// Glorot: uniform(-a, a), a = sqrt(6 / (n_in + n_out)), for the output layer.
@@ -75,7 +74,6 @@ class dense {
             }
         }
         b_.fill(T{0});
-        refresh_transpose();
     }
 
     /// @brief Forward pass: z = x * W + b.
@@ -86,7 +84,10 @@ class dense {
     /// @param x Input, B x n_in.
     /// @param z Output, B x n_out.
     /// @pre x.cols() == n_in(), z.rows() == x.rows(), z.cols() == n_out().
+    ///      If not, the program stops.
     void forward(rho::core::matrix_view<const T> x, rho::core::matrix_view<T> z) const noexcept {
+        rho::core::require(x.cols() == n_in_ && z.rows() == x.rows() && z.cols() == n_out_,
+                           "dense::forward: x must be B x n_in and z must be B x n_out");
         const auto bias = b_.row(0U);
         for (std::size_t r = 0; r < z.rows(); ++r) {
             std::ranges::copy(bias, z.row(r).begin());
@@ -105,10 +106,17 @@ class dense {
     /// @param x The input of the forward pass, B x n_in.
     /// @param dz Gradient of the loss with respect to z, B x n_out.
     /// @param dx Output, B x n_in, or an empty view (0 rows) if not needed.
+    /// @pre x is B x n_in, dz is B x n_out, and dx is empty or B x n_in.
     /// @pre The layer was made with needs_input_grad == true if dx is not empty.
+    ///      If a precondition is false, the program stops.
     void backward(rho::core::matrix_view<const T> x,
                   rho::core::matrix_view<const T> dz,
                   rho::core::matrix_view<T> dx) noexcept {
+        rho::core::require(x.cols() == n_in_ && dz.cols() == n_out_ && x.rows() == dz.rows(),
+                           "dense::backward: x must be B x n_in and dz must be B x n_out");
+        rho::core::require(dx.rows() == 0U
+                               || (wt_.rows() != 0U && dx.rows() == dz.rows() && dx.cols() == n_in_),
+                           "dense::backward: dx must be empty or B x n_in (needs_input_grad)");
 
         // Row i of dW is the sum over the batch of x(r, i) * (row r of dz).
         // Each thread writes its own rows of dW, so there is no data race.
@@ -135,6 +143,7 @@ class dense {
         }
 
         if (dx.rows() != 0U) {
+            refresh_transpose(); // W may have changed since the last call (optimizer step)
             for (std::size_t r = 0; r < dx.rows(); ++r) {
                 std::ranges::fill(dx.row(r), T{0}); // gemm adds into dx
             }
@@ -142,9 +151,8 @@ class dense {
         }
     }
 
-    /// @brief Copy W into W^T. Call it after each change of W.
-    ///
-    /// It does nothing for a layer without W^T (needs_input_grad == false).
+  private:
+    /// Copy W into W^T. It does nothing for a layer without W^T (needs_input_grad == false).
     void refresh_transpose() noexcept {
         if (wt_.rows() == 0U) { // no W^T (needs input grad == false, e.g. layer 0)
             return;
@@ -152,6 +160,7 @@ class dense {
         rho::linalg::transpose<T>(w_.view(), wt_.view());
     }
 
+  public:
     /// @return Writable view of W (n_in x n_out). The optimizer changes it.
     [[nodiscard]] rho::core::matrix_view<T> weights() noexcept {
         return w_.view();

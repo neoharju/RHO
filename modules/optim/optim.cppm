@@ -23,7 +23,6 @@ class sgd {
     ///
     /// The gradients must be batch means (mlp::forward_backward() gives batch means).
     /// @param params Parameters and gradients, from mlp::parameters().
-    /// @note After the step, call mlp::after_update() (it updates the cached W^T).
     void step(std::span<const rho::nn::param_ref<T>> params) noexcept {
         for (const auto &p : params) {
             for (std::size_t i = 0; i < p.value.rows(); ++i) {

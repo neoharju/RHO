@@ -79,7 +79,6 @@ train_epoch(rho::nn::mlp<float> &net, rho::optim::sgd<float> &opt, rho::io::batc
         loss_sum += static_cast<double>(batch_loss) * static_cast<double>(b.x.rows());
 
         opt.step(net.parameters());
-        net.after_update();
     }
     out.loss = out.total == 0U ? 0.0 : loss_sum / static_cast<double>(out.total);
     return out;

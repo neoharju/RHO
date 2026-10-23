@@ -6,7 +6,6 @@ import rho.core.rng;
 TEST(xoshiro256pp, SameSeedDeterministic) {
     rho::core::xoshiro256pp a{1234U};
     rho::core::xoshiro256pp b{1234U};
-    bool differs = false;
 
     for (int i = 0; i < 1000; ++i)
         ASSERT_EQ(a.next(), b.next()) << " differed at iteration " << i << '\n';

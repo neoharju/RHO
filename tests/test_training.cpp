@@ -90,7 +90,6 @@ TEST(Training, OverfitsTinyDataset) {
 	for (std::size_t step = 0; step < 5000 && loss > 0.01f; ++step) {
 		loss = net.forward_backward(data.rows(0, samples), data.labels(0, samples));
 		opt.step(net.parameters());
-		net.after_update();
 	}
 	loss = net.loss(data.rows(0, samples), data.labels(0, samples));
 
@@ -127,7 +126,6 @@ TEST(Training, GradientsNonZero_LossDecreases) {
 
 
 	opt.step(net.parameters());
-	net.after_update();
 
 	const float loss_after = net.loss(x, y);
 
@@ -161,7 +159,6 @@ TEST(Training, AllLayersChange) {
 	std::ignore = net.forward_backward(x, y);
 
 	opt.step(net.parameters());
-	net.after_update();
 
 	// parameter should differ in at least one value
 	for (const auto &[p, old] : std::views::zip(net.parameters(), params_before)) {
@@ -190,7 +187,6 @@ TEST(Training, BatchDoesNotAffectOutput) {
 	// We do one step so the biases are not 0
 	std::ignore = net.forward_backward(x, y);
 	opt.step(net.parameters());
-	net.after_update();
 
 	// copy the batch output since the next forward() will overwrite it
 	matrix<float> batch{samples, 4};
