@@ -28,11 +28,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
-# Initializes CXX_MODULE_STD ON for every target, so `import std;`
-# is usable without setting the property per-target.
 set(CMAKE_CXX_MODULE_STD ON)
 
 option(RHO_BUILD_TESTS "Build RHO tests" OFF)
+option(RHO_COVERAGE "rho_lib and the tests for gcov/gcovr coverage" OFF)
+
+set(RHO_MARCH "native" CACHE STRING "Value for -march (empty: compiler default)")
+
+set(RHO_SANITIZE "" CACHE STRING "Value for -fsanitize (empty: none)")
+
+if(RHO_SANITIZE)
+  add_compile_options(-fsanitize=${RHO_SANITIZE} -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=${RHO_SANITIZE})
+endif()
 
 # --- RHO LIBRARY ----------------------------------
 add_library(rho_lib)
@@ -65,13 +73,21 @@ target_link_libraries(rho_lib
 	OpenMP::OpenMP_CXX
 )
 
+if(RHO_MARCH)
+  target_compile_options(rho_lib PUBLIC -march=${RHO_MARCH})
+endif()
+
 target_compile_options(rho_lib
   PRIVATE
-  -march=native
   -Wall
   -Wextra
   -Wpedantic
 )
+
+if(RHO_COVERAGE)
+  target_compile_options(rho_lib PUBLIC --coverage -O0 -g)
+  target_link_options(rho_lib PUBLIC --coverage)
+endif()
 
 # -------------------------------------------------
 add_executable(RHO
@@ -85,7 +101,6 @@ target_link_libraries(RHO
 
 target_compile_options(RHO
   PRIVATE
-  -march=native
   -Wall
   -Wextra
   -Wpedantic
@@ -113,7 +128,7 @@ if(RHO_BUILD_TESTS)
   FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.18.0
+    GIT_TAG 063de7e9578f82b369302001269680b4b1553359 # v1.18.0
   )
 
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
@@ -134,6 +149,12 @@ if(RHO_BUILD_TESTS)
     PRIVATE
     rho_lib
     GTest::gtest_main
+  )
+
+  target_compile_options(RHO_tests
+    PRIVATE
+    -Wall
+    -Wextra
   )
 
   target_compile_definitions(RHO_tests

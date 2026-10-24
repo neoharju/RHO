@@ -4,12 +4,12 @@
 # Build and run the program:
 #   docker build -t rho .
 #   docker run --rm rho
-#   #docker run --rm -v "$PWD/data:/app/data:ro" rho
+#   docker run --rm -v "$PWD/data:/app/data:ro" rho
 #
 # Build and run the tests
 #   docker build --target tests -t rho-tests .
 #   docker run --rm -t rho-tests
-#   #docker run --rm -t -v "$PWD/data:/src/data:ro" rho-tests
+#   docker run --rm -t -v "$PWD/data:/src/data:ro" rho-tests
 
 FROM archlinux:latest@sha256:b21322c663be387c0ed9cbc7bbbfe18e41633ad4e7b7c77cfad45f128be20040 AS base
 
@@ -27,6 +27,11 @@ FROM base AS build
 RUN --mount=type=cache,target=/var/cache/pacman/pkg,sharing=locked \
     pacman -S --noconfirm --needed gcc cmake ninja git
 
+# Use --build-arg RHO_MARCH=x86-64-v3 instead if you run the image on a machine
+# other than the build machine, or change it here.
+# x86-64-v3 is for avx2 and fma
+ARG RHO_MARCH=native
+
 WORKDIR /src
 COPY CMakeLists.txt ./
 COPY modules/ modules/
@@ -35,6 +40,7 @@ COPY tests/ tests/
 
 # We are making a static binary for runtime
 RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRHO_BUILD_TESTS=ON \
+          -DRHO_MARCH=${RHO_MARCH} \
           -DCMAKE_EXE_LINKER_FLAGS=-static-pie \
  && cmake --build build
 
