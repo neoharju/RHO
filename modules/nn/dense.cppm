@@ -21,28 +21,22 @@ enum class init_scheme : std::uint8_t {
 /// Shapes (B = number of samples in the batch):
 ///  - x: B x n_in (input), W: n_in x n_out, b: 1 x n_out, z: B x n_out.
 ///
-/// The layer owns its parameters (W, b) and their gradients (dW, db).
-/// It also keeps a copy of W^T, because then dx = dz * W^T is a normal GEMM
-/// with rows in memory order. The first layer does not need dx, so it has no W^T.
-/// backward() updates W^T from W before it uses it, so W^T can never be out of date
-/// after an optimizer step. The copy costs O(n_in * n_out), much less than the GEMMs.
+/// The layer owns its parameters (W, b) and their gradients (dW, db). The GEMMs read
+/// x^T and W^T in place (gemm_task::A_transposed, B_transposed), so the layer keeps no
+/// transposed copies.
 ///
-/// @tparam T Element type (float or double).
+/// @tparam T Element type. Only float works: the GEMM is for float only.
 template <class T>
 class dense {
   public:
     /// @brief Make a layer. All parameters and gradients are 0. Call initialize() next.
     /// @param n_in Number of inputs.
     /// @param n_out Number of outputs.
-    /// @param needs_input_grad If true, backward() can compute dx (the layer keeps W^T).
-    ///        Use false for the first layer, because nothing comes before it.
-    dense(std::size_t n_in, std::size_t n_out, bool needs_input_grad = true)
-        : w_{n_in, n_out},
-          wt_{needs_input_grad ? rho::core::matrix<T>{n_out, n_in} : rho::core::matrix<T>{}},
-          dw_{n_in, n_out}, b_{1U, n_out}, db_{1U, n_out}, n_in_{n_in}, n_out_{n_out} {
+    dense(std::size_t n_in, std::size_t n_out)
+        : w_{n_in, n_out}, dw_{n_in, n_out}, b_{1U, n_out}, db_{1U, n_out}, n_in_{n_in},
+          n_out_{n_out} {
 
         w_.fill(T{0});
-        wt_.fill(T{0});
         dw_.fill(T{0});
         b_.fill(T{0});
         db_.fill(T{0});
@@ -76,23 +70,28 @@ class dense {
         b_.fill(T{0});
     }
 
-    /// @brief Forward pass: z = x * W + b.
+    /// @brief Forward pass: z = x * W + b, or ReLU(x * W + b) if relu is true.
     ///
-    /// Each row of z is first set to b. Then gemm adds x * W.
-    /// So the bias addition costs no extra pass over z.
+    /// The GEMM adds b and applies the ReLU when it writes z, so they cost no extra pass
+    /// over z.
     ///
     /// @param x Input, B x n_in.
     /// @param z Output, B x n_out.
+    /// @param relu true: z = ReLU(x * W + b).
     /// @pre x.cols() == n_in(), z.rows() == x.rows(), z.cols() == n_out().
     ///      If not, the program stops.
-    void forward(rho::core::matrix_view<const T> x, rho::core::matrix_view<T> z) const noexcept {
+    void forward(rho::core::matrix_view<const T> x,
+                 rho::core::matrix_view<T> z,
+                 bool relu = false) const noexcept {
         rho::core::require(x.cols() == n_in_ && z.rows() == x.rows() && z.cols() == n_out_,
                            "dense::forward: x must be B x n_in and z must be B x n_out");
-        const auto bias = b_.row(0U);
-        for (std::size_t r = 0; r < z.rows(); ++r) {
-            std::ranges::copy(bias, z.row(r).begin());
-        }
-        rho::linalg::gemm<T>(x, w_.view(), z);
+        const std::array task{rho::linalg::gemm_task{.A = x,
+                                                     .B = w_.view(),
+                                                     .C = z,
+                                                     .mode = rho::linalg::gemm_mode::overwrite,
+                                                     .bias = b_.row(0U),
+                                                     .relu = relu}};
+        rho::linalg::gemm_batch(task);
     }
 
     /// @brief Backward pass. It computes the gradients from dz = dL/dz.
@@ -107,31 +106,29 @@ class dense {
     /// @param dz Gradient of the loss with respect to z, B x n_out.
     /// @param dx Output, B x n_in, or an empty view (0 rows) if not needed.
     /// @pre x is B x n_in, dz is B x n_out, and dx is empty or B x n_in.
-    /// @pre The layer was made with needs_input_grad == true if dx is not empty.
     ///      If a precondition is false, the program stops.
     void backward(rho::core::matrix_view<const T> x,
                   rho::core::matrix_view<const T> dz,
                   rho::core::matrix_view<T> dx) noexcept {
         rho::core::require(x.cols() == n_in_ && dz.cols() == n_out_ && x.rows() == dz.rows(),
                            "dense::backward: x must be B x n_in and dz must be B x n_out");
-        rho::core::require(dx.rows() == 0U
-                               || (wt_.rows() != 0U && dx.rows() == dz.rows() && dx.cols() == n_in_),
-                           "dense::backward: dx must be empty or B x n_in (needs_input_grad)");
+        rho::core::require(dx.rows() == 0U || (dx.rows() == dz.rows() && dx.cols() == n_in_),
+                           "dense::backward: dx must be empty or B x n_in");
 
-        // Row i of dW is the sum over the batch of x(r, i) * (row r of dz).
-        // Each thread writes its own rows of dW, so there is no data race.
-#pragma omp parallel for
-        for (std::size_t i = 0; i < n_in_; ++i) {
-            const auto dw_i = dw_.row(i);
-            std::ranges::fill(dw_i, T{0});
-            for (std::size_t r = 0; r < dz.rows(); ++r) {
-                const T x_ri = x(r, i);
-                const auto dz_r = dz.row(r);
-                for (std::size_t j = 0; j < n_out_; ++j) {
-                    dw_i[j] += x_ri * dz_r[j];
-                }
-            }
-        }
+        // dW = x^T * dz and dx = dz * W^T in one parallel region. x^T and W^T are read in
+        // place, and the old dW and dx are not read (overwrite).
+        const std::array tasks{
+            rho::linalg::gemm_task{.A = x,
+                                   .B = dz,
+                                   .C = dw_.view(),
+                                   .A_transposed = true,
+                                   .mode = rho::linalg::gemm_mode::overwrite},
+            rho::linalg::gemm_task{.A = dz,
+                                   .B = w_.view(),
+                                   .C = dx,
+                                   .B_transposed = true,
+                                   .mode = rho::linalg::gemm_mode::overwrite}};
+        rho::linalg::gemm_batch(std::span{tasks}.first(dx.rows() != 0U ? 2U : 1U));
 
         const auto db = db_.row(0U);
         std::ranges::fill(db, T{0});
@@ -141,26 +138,8 @@ class dense {
                 db[j] += dz_r[j];
             }
         }
-
-        if (dx.rows() != 0U) {
-            refresh_transpose(); // W may have changed since the last call (optimizer step)
-            for (std::size_t r = 0; r < dx.rows(); ++r) {
-                std::ranges::fill(dx.row(r), T{0}); // gemm adds into dx
-            }
-            rho::linalg::gemm<T>(dz, wt_.view(), dx);
-        }
     }
 
-  private:
-    /// Copy W into W^T. It does nothing for a layer without W^T (needs_input_grad == false).
-    void refresh_transpose() noexcept {
-        if (wt_.rows() == 0U) { // no W^T (needs input grad == false, e.g. layer 0)
-            return;
-        }
-        rho::linalg::transpose<T>(w_.view(), wt_.view());
-    }
-
-  public:
     /// @return Writable view of W (n_in x n_out). The optimizer changes it.
     [[nodiscard]] rho::core::matrix_view<T> weights() noexcept {
         return w_.view();
@@ -180,7 +159,6 @@ class dense {
 
   private:
     rho::core::matrix<T> w_;  // weights, n_in x n_out
-    rho::core::matrix<T> wt_; // W^T, n_out x n_in; empty if this layer has no dX
     rho::core::matrix<T> dw_; // weight gradients
     rho::core::matrix<T> b_;  // bias, one row
     rho::core::matrix<T> db_; // bias gradients

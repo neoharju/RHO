@@ -10,7 +10,7 @@ export namespace rho::optim {
 
 /// @brief Stochastic gradient descent: w = w - lr * dw for each parameter.
 ///
-/// Time: O(P), with P = number of parameters. Extra memory: none.
+/// Time: O(P), with P = number of parameters.
 template <class T>
 class sgd {
   public:
@@ -25,7 +25,9 @@ class sgd {
     /// @param params Parameters and gradients, from mlp::parameters().
     void step(std::span<const rho::nn::param_ref<T>> params) noexcept {
         for (const auto &p : params) {
-            for (std::size_t i = 0; i < p.value.rows(); ++i) {
+            const std::size_t rows = p.value.rows();
+#pragma omp parallel for schedule(static) if (rows * p.value.cols() >= 16384U)
+            for (std::size_t i = 0; i < rows; ++i) {
                 const auto w = p.value.row(i);
                 const auto g = p.grad.row(i);
                 for (std::size_t j = 0; j < w.size(); ++j) {

@@ -35,10 +35,10 @@ inline void relu_forward(rho::core::matrix_view<const T> z, rho::core::matrix_vi
 /// ReLU'(z) is 1 for z > 0 and 0 for z < 0. At z = 0 any value in [0, 1] is a
 /// valid subgradient. We use 0.
 ///
-/// @param z The input of the forward pass, B x n.
+/// @param z The input of the forward pass, B x n. The output a = ReLU(z) also works:
+///        a > 0 exactly where z > 0, so both give the same dz.
 /// @param da Gradient of the loss with respect to the output a, B x n.
 /// @param dz Output: gradient of the loss with respect to z, B x n.
-/// @pre All three have the same shape.
 template <class T>
 inline void relu_backward(rho::core::matrix_view<const T> z,
                           rho::core::matrix_view<const T> da,

@@ -30,7 +30,7 @@ struct param_ref {
 /// All activation and gradient buffers are allocated one time in the constructor,
 /// for max_batch rows. forward() and forward_backward() do not allocate memory.
 ///
-/// @tparam T Element type (float or double).
+/// @tparam T Element type. Only float works: the GEMM is for float only.
 template <class T>
 class mlp {
   public:
@@ -48,7 +48,7 @@ class mlp {
 
         layers_.reserve(n_layers);
         for (std::size_t l = 0; l < n_layers; ++l) {
-            layers_.emplace_back(sizes[l], sizes[l + 1U], l != 0U);
+            layers_.emplace_back(sizes[l], sizes[l + 1U]);
         }
 
         rho::core::xoshiro256pp rng{seed};
@@ -58,8 +58,8 @@ class mlp {
                                   rng);
         }
 
+        logits_ = rho::core::matrix<T>{max_batch, sizes.back()};
         for (std::size_t l = 0; l < n_layers; ++l) {
-            z_.emplace_back(max_batch, sizes[l + 1U]);
             d_.emplace_back(max_batch, sizes[l + 1U]);
             dx_.emplace_back(l == 0U ? rho::core::matrix<T>{}
                                      : rho::core::matrix<T>{max_batch, sizes[l]});
@@ -104,24 +104,22 @@ class mlp {
         const std::size_t b = x.rows();
         batch_ = b;
 
-        // Hidden layers: dense, ReLU
+        // Hidden layers: a = ReLU(input * W + b), in one GEMM
         rho::core::matrix_view<const T> input = x;
         for (std::size_t l = 0; l + 1U < layers_.size(); ++l) {
-            const auto z = first_rows(z_[l], b);
             const auto a = first_rows(a_[l], b);
-            layers_[l].forward(input, z);
-            relu_forward<T>(z, a);
+            layers_[l].forward(input, a, true);
             input = a;
         }
         // Output layer: dense
-        const auto logits = first_rows(z_.back(), b);
+        const auto logits = first_rows(logits_, b);
         layers_.back().forward(input, logits);
         return logits;
     }
 
     /// @return The logits of the last forward pass.
     [[nodiscard]] rho::core::matrix_view<const T> logits() noexcept {
-        return first_rows(z_.back(), batch_);
+        return first_rows(logits_, batch_);
     }
 
     /// @brief Forward pass and mean loss. No gradients.
@@ -142,7 +140,7 @@ class mlp {
     /// Backpropagation, from the top layer l = L-1 down to 1:
     ///   d_[l]      = dL/dz_l   (for the top layer: from softmax_cross_entropy)
     ///   dx_[l]     = d_[l] * W_l^T            (in dense::backward)
-    ///   d_[l - 1]  = dx_[l] * ReLU'(z_{l-1})  (in relu_backward)
+    ///   d_[l - 1]  = dx_[l] * ReLU'(z_{l-1})  (in relu_backward, with a_{l-1}: a > 0 where z > 0)
     /// The first layer computes only dW and db.
     ///
     /// @param x Input batch, B x sizes[0].
@@ -159,7 +157,7 @@ class mlp {
         for (std::size_t l = layers_.size() - 1U; l > 0U; --l) {
             const auto dx = first_rows(dx_[l], b);
             layers_[l].backward(first_rows(a_[l - 1U], b), first_rows(d_[l], b), dx);
-            relu_backward<T>(first_rows(z_[l - 1U], b), dx, first_rows(d_[l - 1U], b));
+            relu_backward<T>(first_rows(a_[l - 1U], b), dx, first_rows(d_[l - 1U], b));
         }
         // bottom layer: weight gradients
         layers_.front().backward(x, first_rows(d_.front(), b), rho::core::matrix_view<T>{});
@@ -187,8 +185,8 @@ class mlp {
     }
 
     std::vector<dense<T>> layers_;
-    std::vector<rho::core::matrix<T>> z_;  // each layer's output, before ReLU
-    std::vector<rho::core::matrix<T>> a_;  // after ReLU, hidden layers only
+    rho::core::matrix<T> logits_;          // output of the last layer
+    std::vector<rho::core::matrix<T>> a_;  // output of each hidden layer, after ReLU
     std::vector<rho::core::matrix<T>> d_;  // loss gradient at each layers output
     std::vector<rho::core::matrix<T>> dx_; // loss gradient at each layers input
     std::vector<param_ref<T>> params_;     // views into layers_ (heap data, stable on move)
