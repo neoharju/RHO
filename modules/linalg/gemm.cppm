@@ -263,22 +263,22 @@ static void micro_kernel(std::size_t kb,
     constexpr std::size_t hi{kernel::lanes}; // 8 for avx2, 16 for avx512
 
     const __m256 bias_lo = load_bias(0), bias_hi = load_bias(hi);
-    __m256 c0_lo = _mm256_add_ps(load(0, 0), bias_lo)
+    __m256 c0_lo = _mm256_add_ps(load(0, 0), bias_lo);
 	__m256 c0_hi = _mm256_add_ps(load(0, hi), bias_hi);
 
-    __m256 c1_lo = _mm256_add_ps(load(1, 0), bias_lo)
+    __m256 c1_lo = _mm256_add_ps(load(1, 0), bias_lo);
 	__m256 c1_hi = _mm256_add_ps(load(1, hi), bias_hi);
 
-    __m256 c2_lo = _mm256_add_ps(load(2, 0), bias_lo)
+    __m256 c2_lo = _mm256_add_ps(load(2, 0), bias_lo);
 	__m256 c2_hi = _mm256_add_ps(load(2, hi), bias_hi);
 
-    __m256 c3_lo = _mm256_add_ps(load(3, 0), bias_lo)
+    __m256 c3_lo = _mm256_add_ps(load(3, 0), bias_lo);
 	__m256 c3_hi = _mm256_add_ps(load(3, hi), bias_hi);
 
-    __m256 c4_lo = _mm256_add_ps(load(4, 0), bias_lo)
+    __m256 c4_lo = _mm256_add_ps(load(4, 0), bias_lo);
 	__m256 c4_hi = _mm256_add_ps(load(4, hi), bias_hi);
 
-    __m256 c5_lo = _mm256_add_ps(load(5, 0), bias_lo)
+    __m256 c5_lo = _mm256_add_ps(load(5, 0), bias_lo);
 	__m256 c5_hi = _mm256_add_ps(load(5, hi), bias_hi);
 
     const float *a_p = A.data; // A(0, p): moves one column of A in each step
