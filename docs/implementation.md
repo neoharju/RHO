@@ -144,7 +144,9 @@ For the default network (784-256-128-10), W = 234 752. One training sample costs
 - The GEMM implementation is about 3x faster than the school-boys'
   `i-k-j`-performance variant from `i-j-k`.
 
-TODO: compare to e.g. tensorflow/pytorch
+- A PyTorch implementation at root (torch_mnist.py) is doing 5 seconds per epoch
+  with the same settings as RHO is doing in 0.5 seconds per epoch, so it is 10x
+  slower.
 
 ## 5. Suggestions for improvement
 - MNIST training specifically:
