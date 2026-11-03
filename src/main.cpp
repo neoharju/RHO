@@ -10,7 +10,6 @@ import rho.train;
 
 namespace app {
 
-	// namespace fs; using fs?
 	namespace fs = std::filesystem;
 
 	// Settings
@@ -44,6 +43,7 @@ namespace app {
 	using Error = std::variant<DatasetError, ValidationSizeError>;
 
 	/// @brief Print a human-readable message for an error to std::cerr.
+	/// @param error The error to print.
 	void display_error(const Error &error) {
 		constexpr auto visitor = rho::io::match{
 			[](const DatasetError &e) { rho::io::display_error(e.error); },

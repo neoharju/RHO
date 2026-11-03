@@ -1,7 +1,8 @@
 /// @file gemm.cppm
 /// @brief Matrix multiplication (GEMM) for float with AVX2 and FMA.
 ///
-/// gemm(), gemm_tn() and gemm_nt() compute C = A * B, C = A^T * B and C = A * B^T. They can
+/// gemm(), gemm_tn() and gemm_nt() compute C = A * B, C = A^T * B and C = A * B^T. They add
+/// the result to C, or they write over C (gemm_mode).
 /// gemm_batch() computes several independent GEMMs in one parallel region. It can also add a bias row and apply ReLU when it writes C.
 ///
 /// The GEMM uses a modified method of Goto and van de Geijn (BLIS). It has five loops around a small kernel. Each loop level keeps one part of the data in one cache level:
@@ -137,10 +138,11 @@ static constexpr matrix_view<T> block_view(
 
 /// @brief Pack a kb x nb block of op(B) into dst, as micro-panels of NR columns.
 ///
-/// The micro-panel of columns j to j + NR - 1 starts at dst[j * kb]. columns
+/// The micro-panel of columns j to j + NR - 1 starts at dst[j * kb]. It keeps its NR columns
 /// row by row: dst[j * kb + p * NR + jj] = op(B)(p, j + jj).
 ///
-/// padded with zeros.
+/// If nb is not a multiple of NR, the function writes zeros in the empty columns of the last
+/// micro-panel.
 ///
 /// @param B The block of op(B).
 /// @param kb Rows of the block.
@@ -335,7 +337,9 @@ static void micro_kernel(std::size_t kb,
 /// @brief C = A * B~ + bias + (C or 0), then ReLU if asked, for one block of op(A) and one
 ///        packed panel of B.
 ///
-/// MR x NR tiles
+/// The function divides the block of C into MR x NR tiles. The full tiles use
+/// micro_kernel<false>. The tiles at the right edge and at the bottom edge use
+/// micro_kernel<true>.
 ///
 /// @param kb Shared dimension.
 /// @param A The block of op(A), C.rows() x kb (not packed).
@@ -344,8 +348,7 @@ static void micro_kernel(std::size_t kb,
 /// @param bias_step 1 for a bias row, 0 for no_bias.
 /// @param relu true: apply ReLU before the store.
 /// @param C The block of C.
-/// @param load_c true: add to C. 
-///				  false: write over C
+/// @param load_c true: add to C. false: write over C.
 [[gnu::noinline]]
 static void macro_kernel(std::size_t kb,
                          strided_view A,
@@ -386,10 +389,18 @@ static void macro_kernel(std::size_t kb,
 
 #pragma GCC pop_options
 
-/// @brief The part of GEMM for one thread
+/// @brief Calculate the part of one GEMM that belongs to one thread.
 ///
-/// Each thread computes its own part of C. 
-/// rows if C has more rows than columns (dW), else columns (forward pass, dx)
+/// The function divides C into parts of full tiles; parts of rows if C has more
+/// rows than columns (dW), else parts of columns (forward pass, dx). Each thread writes only
+/// its own part of C. 
+///
+/// Each element of C gets the same operations in the same order for all
+/// numbers of threads. Therefore the result does not change with the number of threads
+///
+/// @param task The GEMM.
+/// @param thread Index of this thread, 0 to threads - 1.
+/// @param threads Number of threads in the parallel region.
 static void gemm_part(const gemm_task &task, std::size_t thread, std::size_t threads) noexcept {
     const matrix_view<float> C = task.C;
     const std::size_t m = C.rows();
@@ -510,7 +521,7 @@ void gemm(matrix_view<const float> A,
 /// @brief GEMM with A transposed: C += A^T * B (default), or C = A^T * B with
 ///        gemm_mode::overwrite.
 ///
-/// The GEMM reads A^T directly from A, so there is no copy of A^T. Duriung the backward pass
+/// The GEMM reads A^T directly from A, so there is no copy of A^T. During the backward pass
 /// this gives dW = x^T * dz directly from x.
 ///
 /// @param A Input, k x m (so A^T is m x k).

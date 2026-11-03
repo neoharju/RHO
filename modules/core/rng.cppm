@@ -155,6 +155,7 @@ class xoshiro256pp {
     /// @brief Uniform double in [lo, hi).
     /// @param lo Lower limit (included).
     /// @param hi Upper limit (not included). Must be > lo.
+    /// @return A value in [lo, hi).
     [[nodiscard]] double uniform(double lo, double hi) noexcept {
         return lo + (hi - lo) * uniform01();
     }

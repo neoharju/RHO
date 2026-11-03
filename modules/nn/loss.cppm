@@ -161,6 +161,9 @@ template <class T, class U>
 /// @brief Index of the largest score in row i (the predicted class).
 ///
 /// If two scores are equal, the smaller index wins.
+/// @param scores N x C (logits or probabilities).
+/// @param i The row.
+/// @return The column of the largest score in row i, 0 to C - 1.
 /// @pre i < scores.rows() and scores.cols() >= 1.
 template <class T>
 [[nodiscard]] std::size_t argmax_row(rho::core::matrix_view<const T> scores,

@@ -136,13 +136,16 @@ if(RHO_BUILD_TESTS)
   FetchContent_MakeAvailable(googletest)
 
   add_executable(RHO_tests
+    tests/test_batch.cpp
     tests/test_gemm.cpp
+    tests/test_gradient.cpp
     tests/test_matrix.cpp
+    tests/test_mlp.cpp
     tests/test_normalization.cpp
     tests/test_nn.cpp
     tests/test_rng.cpp
+    tests/test_trainer.cpp
     tests/test_training.cpp
-	# tests/test_batch.cpp
   )
 
   target_link_libraries(RHO_tests
