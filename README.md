@@ -61,18 +61,24 @@ Run the following script to build and run tests in debug mode:
 
 [Specification Document](docs/specificationdocument.md)
 
+[Implementation Document](docs/implementation.md)
+
+[Testing Document](docs/testing.md)
+
+[User Guide](docs/userguide.md)
+
 ### Weekly reports
 
-[Week 1](/docs/reports/week1.md)
+[Week 1](docs/reports/week1.md)
 
-[Week 2](/docs/reports/week2.md)
+[Week 2](docs/reports/week2.md)
 
-[Week 3](/docs/reports/week3.md)
+[Week 3](docs/reports/week3.md)
 
-[Week 4](/docs/reports/week4.md)
+[Week 4](docs/reports/week4.md)
 
-[Week 5](/docs/reports/week5.md)
+[Week 5](docs/reports/week5.md)
 
-[Week 6](/docs/reports/week6.md)
+[Week 6](docs/reports/week6.md)
 
-[Week 7](/docs/reports/week7.md)
+[Week 7](docs/reports/week7.md)
